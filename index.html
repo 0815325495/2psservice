@@ -1,0 +1,3030 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <title>2PS PDI System</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <!-- QR Code Scanner -->
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <style>
+    html { scroll-behavior: smooth; }
+    .active-tab { 
+      background: rgba(255,255,255,0.2); 
+      border-bottom: 3px solid white;
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-indigo-50 to-sky-100 text-gray-800">
+
+  <!-- Header -->
+  <header class="bg-white/90 backdrop-blur shadow">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center font-bold">QC</div>
+        <h1 class="text-2xl font-bold text-indigo-700">2PS PDI System</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <div id="connectionStatus" class="text-sm px-3 py-1 rounded-full bg-green-100 text-green-800">🌐 Firebase เชื่อมต่อแล้ว</div>
+        <div class="text-gray-600 text-sm" id="currentTime"></div>
+      </div>
+    </div>
+  </header>
+
+  <!-- User Info Bar -->
+  <div class="bg-white border-b border-gray-200 px-4 py-2">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+      <div class="flex items-center gap-3 text-sm">
+        <span class="text-gray-600">ผู้ใช้:</span>
+        <span class="font-medium text-gray-900">ผู้ดูแลระบบ</span>
+        <span class="px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-700">👑 ADMIN</span>
+        <span class="px-2 py-1 rounded text-xs font-medium bg-orange-100 text-orange-700">🔥 Firebase</span>
+      </div>
+      <div class="text-gray-600 text-sm">
+        🔓 เข้าใช้งานได้ทันที
+      </div>
+    </div>
+  </div>
+
+  <!-- Navigation Tabs -->
+  <nav class="bg-indigo-700">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex overflow-x-auto no-scrollbar">
+        <button onclick="switchTab('qc')" id="tab-qc" class="tab-btn active-tab py-3 px-5 text-white hover:bg-indigo-800 transition whitespace-nowrap">
+          🔎 QC ตรวจสอบ
+        </button>
+        <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn py-3 px-5 text-white hover:bg-indigo-800 transition whitespace-nowrap">
+          📊 แดชบอร์ด
+        </button>
+        <button onclick="switchTab('pdi')" id="tab-pdi" class="tab-btn py-3 px-5 text-white hover:bg-indigo-800 transition whitespace-nowrap">
+          🧰 PDI Operation
+        </button>
+        <button onclick="switchTab('admin')" id="tab-admin" class="tab-btn py-3 px-5 text-white hover:bg-indigo-800 transition whitespace-nowrap">
+          ⚙️ Admin
+        </button>
+        <button onclick="switchTab('user')" id="tab-user" class="tab-btn py-3 px-5 text-white hover:bg-indigo-800 transition whitespace-nowrap">
+          👥 User
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="max-w-7xl mx-auto p-4 sm:p-6">
+    
+    <!-- QC Section -->
+    <div id="section-qc" class="tab-content">
+      <div class="bg-white rounded-2xl shadow-lg p-6">
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">🔎 ตรวจสอบรถ (QC)</h2>
+        
+        <!-- VIN Input -->
+        <div class="space-y-2 mb-6">
+          <label class="block text-sm font-medium text-gray-700">เลข VIN</label>
+          <div class="flex flex-col sm:flex-row gap-2">
+            <input id="vinInput" type="text" placeholder="สแกนหรือพิมพ์เลข VIN"
+                   class="flex-1 px-4 py-3 border rounded-xl focus:ring-2 focus:ring-indigo-500">
+            <div class="flex gap-2">
+              <button onclick="searchVin()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-xl">
+                ค้นหา
+              </button>
+              <button onclick="openCamera()" id="cameraBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-xl">
+                📷 สแกน QR
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Car Status Display -->
+        <div id="carStatus" class="mb-6 p-4 rounded-xl border bg-blue-50 border-blue-200 hidden">
+          <h4 class="font-semibold text-blue-800 mb-2">สถานะรถ</h4>
+          <div id="carStatusContent" class="text-sm text-blue-700"></div>
+        </div>
+
+        <!-- Photo Upload Section -->
+        <div class="mb-6">
+          <label class="block text-sm font-medium text-gray-700 mb-3">รูปภาพประกอบ (บังคับ 3 รูป)</label>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- Photo Slot 1 -->
+            <div class="bg-white rounded-xl border border-gray-200 p-4">
+              <div class="font-semibold mb-3">📷 หน้าปัด</div>
+              <div class="relative rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 h-40 flex items-center justify-center">
+                <div id="photo1-placeholder" class="text-center text-gray-500">
+                  <div class="text-3xl mb-1">📷</div>
+                  <div class="text-xs">ยังไม่มีรูป</div>
+                </div>
+                <img id="photo1-img" class="hidden w-full h-full object-cover rounded-lg" alt="หน้าปัด">
+              </div>
+              <div class="mt-3 flex gap-2">
+                <button onclick="selectPhoto(1)" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700">
+                  ถ่าย/เลือกรูป
+                </button>
+                <button onclick="clearPhoto(1)" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300">
+                  ล้างรูป
+                </button>
+              </div>
+              <input id="photo1-input" type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoUpload(event, 1)">
+            </div>
+
+            <!-- Photo Slot 2 -->
+            <div class="bg-white rounded-xl border border-gray-200 p-4">
+              <div class="font-semibold mb-3">🔎 เลข VIN</div>
+              <div class="relative rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 h-40 flex items-center justify-center">
+                <div id="photo2-placeholder" class="text-center text-gray-500">
+                  <div class="text-3xl mb-1">🔎</div>
+                  <div class="text-xs">ยังไม่มีรูป</div>
+                </div>
+                <img id="photo2-img" class="hidden w-full h-full object-cover rounded-lg" alt="เลข VIN">
+              </div>
+              <div class="mt-3 flex gap-2">
+                <button onclick="selectPhoto(2)" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700">
+                  ถ่าย/เลือกรูป
+                </button>
+                <button onclick="clearPhoto(2)" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300">
+                  ล้างรูป
+                </button>
+              </div>
+              <input id="photo2-input" type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoUpload(event, 2)">
+            </div>
+
+            <!-- Photo Slot 3 -->
+            <div class="bg-white rounded-xl border border-gray-200 p-4">
+              <div class="font-semibold mb-3">🧾 Check Sheet</div>
+              <div class="relative rounded-lg border-2 border-dashed border-gray-300 bg-gray-50 h-40 flex items-center justify-center">
+                <div id="photo3-placeholder" class="text-center text-gray-500">
+                  <div class="text-3xl mb-1">🧾</div>
+                  <div class="text-xs">ยังไม่มีรูป</div>
+                </div>
+                <img id="photo3-img" class="hidden w-full h-full object-cover rounded-lg" alt="Check Sheet">
+              </div>
+              <div class="mt-3 flex gap-2">
+                <button onclick="selectPhoto(3)" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg hover:bg-indigo-700">
+                  ถ่าย/เลือกรูป
+                </button>
+                <button onclick="clearPhoto(3)" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300">
+                  ล้างรูป
+                </button>
+              </div>
+              <input id="photo3-input" type="file" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoUpload(event, 3)">
+            </div>
+          </div>
+          
+          <div id="photoHint" class="mt-2 text-sm text-amber-800 bg-amber-100 border border-amber-200 rounded px-3 py-2">
+            กรุณาอัปโหลดรูปให้ครบทั้ง 3 รูปก่อนบันทึก
+          </div>
+        </div>
+
+        <!-- Status Selection -->
+        <div id="statusSection" class="mb-6 hidden">
+          <label class="block text-sm font-medium text-gray-700 mb-3">สถานะการตรวจสอบ <span class="text-xs text-gray-500">(กด 1, 2, 3 บนคีย์บอร์ด)</span></label>
+          <div class="grid grid-cols-3 gap-3">
+            <button onclick="selectStatus('OK')" id="status-OK" class="status-btn bg-green-500 hover:bg-green-600 text-white py-4 rounded-xl font-semibold relative">
+              ✅ OK
+              <span class="absolute top-1 right-1 bg-white/20 text-xs px-1 rounded">1</span>
+            </button>
+            <button onclick="selectStatus('NG')" id="status-NG" class="status-btn bg-red-500 hover:bg-red-600 text-white py-4 rounded-xl font-semibold relative">
+              ❌ NG
+              <span class="absolute top-1 right-1 bg-white/20 text-xs px-1 rounded">2</span>
+            </button>
+            <button onclick="selectStatus('REPAIR')" id="status-REPAIR" class="status-btn bg-yellow-500 hover:bg-yellow-600 text-white py-4 rounded-xl font-semibold relative">
+              🔧 REPAIR
+              <span class="absolute top-1 right-1 bg-white/20 text-xs px-1 rounded">3</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Defect Details Section -->
+        <div id="damageSection" class="mb-6 hidden">
+          <div class="flex items-center justify-between mb-4">
+            <label class="block text-sm font-medium text-gray-700">รายละเอียดความเสียหาย</label>
+            <button onclick="addDefectCard()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+              ➕ เพิ่มตำแหน่งความเสียหาย
+            </button>
+          </div>
+          
+          <div id="defectCardsContainer" class="space-y-4">
+            <!-- Defect cards will be added here dynamically -->
+          </div>
+          
+          <div id="noDefectMessage" class="text-center py-8 text-gray-500 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+            <div class="text-4xl mb-2">🔧</div>
+            <div class="text-sm">กดปุ่ม "เพิ่มตำแหน่งความเสียหาย" เพื่อเริ่มบันทึกรายละเอียด</div>
+          </div>
+        </div>
+
+        <!-- Save Button -->
+        <div class="flex justify-center">
+          <button id="saveBtn" onclick="saveRecord()" disabled
+                  class="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-8 py-4 rounded-2xl font-semibold shadow disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+            <span id="saveBtnText">บันทึกผลการตรวจสอบ</span>
+            <span id="saveBtnLoading" class="hidden">
+              <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              กำลังบันทึก...
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Dashboard Section -->
+    <div id="section-dashboard" class="tab-content hidden">
+      <div class="bg-white rounded-2xl shadow-lg p-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+          <h2 class="text-2xl font-bold text-gray-900">📊 แดชบอร์ด</h2>
+          <div class="flex flex-wrap items-center gap-2">
+            <label class="text-sm">วันที่:</label>
+            <input id="dashDate" type="date" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+            <button onclick="refreshDashboard()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm">
+              รีเฟรช
+            </button>
+            <button onclick="exportToExcel()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-sm font-medium">
+              📊 EXPORT EXCEL
+            </button>
+            <button onclick="shareToLine()" class="bg-green-500 hover:bg-green-600 text-white px-3 py-2 rounded-lg text-sm font-medium">
+              📱 ส่ง LINE
+            </button>
+          </div>
+        </div>
+
+        <!-- Combined Work Period Analysis Table -->
+        <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-xl p-6 mb-6">
+          <div class="flex items-center justify-between mb-6">
+            <h3 class="text-xl font-bold text-blue-800">📊 สรุปการทำงานตามช่วงเวลา (P1-P5)</h3>
+            <div class="text-sm text-blue-600 bg-blue-100 px-4 py-2 rounded-lg border border-blue-200">
+              <div class="grid grid-cols-5 gap-2 text-center font-medium">
+                <div class="flex flex-col">
+                  <span class="text-blue-800 font-bold">P1</span>
+                  <span class="text-xs">09:00-10:30</span>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-blue-800 font-bold">P2</span>
+                  <span class="text-xs">10:40-12:30</span>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-blue-800 font-bold">P3</span>
+                  <span class="text-xs">13:30-15:30</span>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-blue-800 font-bold">P4</span>
+                  <span class="text-xs">15:40-18:00</span>
+                </div>
+                <div class="flex flex-col">
+                  <span class="text-blue-800 font-bold">P5</span>
+                  <span class="text-xs">18:30-20:30</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Combined Table -->
+          <div class="bg-white border border-blue-200 rounded-xl overflow-hidden">
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead class="bg-blue-50">
+                  <tr>
+                    <th rowspan="2" class="text-left py-4 px-4 font-semibold text-blue-800 border-r border-blue-200">รุ่นรถ</th>
+                    <th colspan="6" class="text-center py-2 px-4 font-semibold text-green-800 bg-green-100 border-b border-green-200">✅ OK + NG (รวมกัน)</th>
+                    <th colspan="6" class="text-center py-2 px-4 font-semibold text-yellow-800 bg-yellow-100 border-b border-yellow-200">🔧 REPAIR</th>
+                    <th colspan="6" class="text-center py-2 px-4 font-semibold text-blue-800 bg-blue-100 border-b border-blue-200">📊 TOTAL (OK+NG+REPAIR)</th>
+                  </tr>
+                  <tr>
+                    <!-- OK + NG Headers -->
+                    <th class="text-center py-2 px-2 font-semibold text-green-700 bg-green-50 text-xs">P1</th>
+                    <th class="text-center py-2 px-2 font-semibold text-green-700 bg-green-50 text-xs">P2</th>
+                    <th class="text-center py-2 px-2 font-semibold text-green-700 bg-green-50 text-xs">P3</th>
+                    <th class="text-center py-2 px-2 font-semibold text-green-700 bg-green-50 text-xs">P4</th>
+                    <th class="text-center py-2 px-2 font-semibold text-green-700 bg-green-50 text-xs">P5</th>
+                    <th class="text-center py-2 px-2 font-semibold text-green-700 bg-green-200 text-xs border-r border-green-300">รวม</th>
+                    <!-- REPAIR Headers -->
+                    <th class="text-center py-2 px-2 font-semibold text-yellow-700 bg-yellow-50 text-xs">P1</th>
+                    <th class="text-center py-2 px-2 font-semibold text-yellow-700 bg-yellow-50 text-xs">P2</th>
+                    <th class="text-center py-2 px-2 font-semibold text-yellow-700 bg-yellow-50 text-xs">P3</th>
+                    <th class="text-center py-2 px-2 font-semibold text-yellow-700 bg-yellow-50 text-xs">P4</th>
+                    <th class="text-center py-2 px-2 font-semibold text-yellow-700 bg-yellow-50 text-xs">P5</th>
+                    <th class="text-center py-2 px-2 font-semibold text-yellow-700 bg-yellow-200 text-xs border-r border-yellow-300">รวม</th>
+                    <!-- TOTAL Headers -->
+                    <th class="text-center py-2 px-2 font-semibold text-blue-700 bg-blue-50 text-xs">P1</th>
+                    <th class="text-center py-2 px-2 font-semibold text-blue-700 bg-blue-50 text-xs">P2</th>
+                    <th class="text-center py-2 px-2 font-semibold text-blue-700 bg-blue-50 text-xs">P3</th>
+                    <th class="text-center py-2 px-2 font-semibold text-blue-700 bg-blue-50 text-xs">P4</th>
+                    <th class="text-center py-2 px-2 font-semibold text-blue-700 bg-blue-50 text-xs">P5</th>
+                    <th class="text-center py-2 px-2 font-semibold text-blue-700 bg-blue-200 text-xs">รวม</th>
+                  </tr>
+                </thead>
+                <tbody id="combinedTable">
+                  <tr>
+                    <td colspan="19" class="py-8 text-center text-gray-500">กำลังโหลดข้อมูล...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div class="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+            <div class="text-4xl mb-2">✅</div>
+            <div class="text-sm text-green-700 mb-1">OK</div>
+            <div id="dashOk" class="text-3xl font-bold text-green-700">0</div>
+          </div>
+          <div class="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+            <div class="text-4xl mb-2">❌</div>
+            <div class="text-sm text-red-700 mb-1">NG</div>
+            <div id="dashNg" class="text-3xl font-bold text-red-700">0</div>
+          </div>
+          <div class="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center">
+            <div class="text-4xl mb-2">🔧</div>
+            <div class="text-sm text-yellow-700 mb-1">REPAIR</div>
+            <div id="dashRepair" class="text-3xl font-bold text-yellow-700">0</div>
+          </div>
+        </div>
+
+        <!-- Data Table -->
+        <div class="border rounded-xl overflow-hidden">
+          <div class="bg-gray-50 px-4 py-3 border-b">
+            <h4 class="font-semibold text-gray-800">รายการตรวจสอบล่าสุด</h4>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-100">
+                <tr>
+                  <th class="text-left py-3 px-4">VIN</th>
+                  <th class="text-left py-3 px-4">รุ่น</th>
+                  <th class="text-left py-3 px-4">สี</th>
+                  <th class="text-left py-3 px-4">สถานะ</th>
+                  <th class="text-left py-3 px-4">เวลา</th>
+                </tr>
+              </thead>
+              <tbody id="dashTable">
+                <tr>
+                  <td colspan="5" class="py-8 text-center text-gray-500">กำลังโหลดข้อมูล...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PDI Operation Section -->
+    <div id="section-pdi" class="tab-content hidden">
+      <div class="bg-white rounded-2xl shadow-lg p-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+          <h2 class="text-2xl font-bold text-gray-900">🧰 PDI Operation</h2>
+          <div class="flex items-center gap-2">
+            <label class="text-sm">วันที่:</label>
+            <input id="pdiDate" type="date" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-indigo-500">
+            <button onclick="refreshPdi()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm">
+              กรอง
+            </button>
+          </div>
+        </div>
+
+
+
+        <!-- Main Content Area -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Left Column: Pending Cars -->
+          <div class="lg:col-span-1">
+            <div class="bg-yellow-50 border border-yellow-200 rounded-xl">
+              <div class="bg-yellow-100 p-4 rounded-t-xl border-b border-yellow-200">
+                <div class="flex items-center justify-between">
+                  <h3 class="font-bold text-yellow-800">⏳ รอตรวจสอบ</h3>
+                  <span id="pendingCount" class="bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full text-sm font-bold">0</span>
+                </div>
+              </div>
+              <div id="pendingList" class="p-4 space-y-3 max-h-96 overflow-y-auto">
+                <div class="text-center text-gray-500 py-8">
+                  <div class="text-4xl mb-2">🚗</div>
+                  <div>ไม่มีรถที่รอตรวจสอบ</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Completed Cars -->
+          <div class="lg:col-span-1">
+            <div class="bg-green-50 border border-green-200 rounded-xl">
+              <div class="bg-green-100 p-4 rounded-t-xl border-b border-green-200">
+                <div class="flex items-center justify-between">
+                  <h3 class="font-bold text-green-800">✅ ตรวจสอบแล้ว</h3>
+                  <div class="flex items-center gap-2">
+                    <span id="completedCount" class="bg-green-200 text-green-800 px-2 py-1 rounded-full text-sm font-bold">0</span>
+                    <select id="statusFilter" onchange="filterCompleted()" class="text-sm border rounded px-2 py-1">
+                      <option value="all">ทั้งหมด</option>
+                      <option value="OK">✅ OK</option>
+                      <option value="NG">❌ NG</option>
+                      <option value="REPAIR">🔧 REPAIR</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div id="completedList" class="p-4 space-y-3 max-h-96 overflow-y-auto">
+                <div class="text-center text-gray-500 py-8">
+                  <div class="text-4xl mb-2">📋</div>
+                  <div>ยังไม่มีรถที่ตรวจสอบแล้ว</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Progress Bar -->
+        <div class="mt-6 bg-gray-100 rounded-xl p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-sm font-medium text-gray-700">ความคืบหน้าวันนี้</span>
+            <span id="progressText" class="text-sm text-gray-600">0/0 (0%)</span>
+          </div>
+          <div class="w-full bg-gray-200 rounded-full h-3">
+            <div id="progressBar" class="bg-gradient-to-r from-blue-500 to-green-500 h-3 rounded-full transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin Section -->
+    <div id="section-admin" class="tab-content hidden">
+      <div class="bg-white rounded-2xl shadow-lg p-6">
+        <h2 class="text-2xl font-bold text-gray-900 mb-6">⚙️ Admin Panel</h2>
+        
+        <!-- Search Section -->
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+          <h3 class="font-bold text-blue-800 mb-3">ค้นหารถ</h3>
+          <div class="flex gap-2 mb-3">
+            <input id="adminVin" class="flex-1 px-3 py-2 border rounded-lg" placeholder="ใส่ VIN">
+            <button onclick="adminSearch()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg">
+              🔍 ค้นหา
+            </button>
+          </div>
+          <div id="adminSearchResult" class="text-sm text-gray-700"></div>
+        </div>
+        
+        <!-- Admin Edit Form - Centered below search results -->
+        <div class="flex justify-center mb-6">
+          <div id="adminEditForm" class="hidden bg-gray-50 border border-gray-200 rounded-xl p-6 w-full max-w-6xl">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-bold text-gray-800 text-lg">✏️ แก้ไขข้อมูล</h3>
+              <button onclick="saveAdminChanges()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium">
+                💾 บันทึกการเปลี่ยนแปลง
+              </button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <!-- รุ่นรถ -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">รุ่นรถ</label>
+                <div class="relative">
+                  <input id="carModel" type="text" list="carModelList" placeholder="เลือกหรือพิมพ์รุ่นรถ" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500">
+                  <datalist id="carModelList">
+                    <option value="DOLPHIN">
+                    <option value="SEAL5 DM-I">
+                    <option value="SEALION 6 DM-I">
+                    <option value="ATTO3">
+                  </datalist>
+                </div>
+              </div>
+              
+              <!-- สีรถ -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">สีรถ</label>
+                <div class="relative">
+                  <input id="carColor" type="text" list="carColorList" placeholder="เลือกหรือพิมพ์สีรถ" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500">
+                  <datalist id="carColorList">
+                    <option value="GREY">
+                    <option value="WHITE">
+                    <option value="WHITE(CREAM)">
+                    <option value="BLUE">
+                    <option value="BLACK">
+                  </datalist>
+                </div>
+              </div>
+              
+              <!-- PDI Date -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">PDI Date (at BYD)</label>
+                <input id="adminPdiDate" type="date" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500">
+              </div>
+            </div>
+
+            <!-- Defect Cards Section -->
+            <div class="border-t pt-6">
+              <div class="flex items-center justify-between mb-4">
+                <h4 class="font-bold text-gray-800">🔧 รายละเอียดความเสียหาย</h4>
+                <button onclick="addAdminDefectCard()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                  ➕ Add Position
+                </button>
+              </div>
+              
+              <div id="adminDefectCardsContainer" class="space-y-4">
+                <!-- Defect cards will be added here dynamically -->
+              </div>
+              
+              <div id="adminNoDefectMessage" class="text-center py-8 text-gray-500 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
+                <div class="text-4xl mb-2">🔧</div>
+                <div class="text-sm">กดปุ่ม "Add Position" เพื่อเพิ่มตำแหน่งความเสียหาย</div>
+              </div>
+            </div>
+            
+            <div class="mt-4 text-xs text-gray-500">
+              💡 เคล็ดลับ: ทุก dropdown สามารถพิมพ์ค้นหาและเพิ่มข้อมูลใหม่ได้
+            </div>
+          </div>
+        </div>
+
+        <!-- Latest Inspection Records Section -->
+        <div class="bg-white rounded-2xl shadow-lg border border-gray-200 mb-6">
+          <div class="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-t-2xl border-b border-gray-200">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xl font-bold text-purple-800">📋 รายการตรวจสอบล่าสุด</h3>
+              <div class="flex items-center gap-2">
+                <label class="text-sm text-purple-700">วันที่:</label>
+                <input id="adminRecordsDate" type="date" class="px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-purple-500">
+                <button onclick="refreshAdminRecords()" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-2 rounded-lg text-sm">
+                  🔄 รีเฟรช
+                </button>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Stats Summary -->
+          <div class="p-4 bg-gray-50 border-b border-gray-200">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+              <div class="bg-white rounded-lg p-3 border">
+                <div class="text-2xl mb-1">📊</div>
+                <div class="text-xs text-gray-600">ทั้งหมด</div>
+                <div id="adminTotalCount" class="text-lg font-bold text-gray-800">0</div>
+              </div>
+              <div class="bg-green-50 rounded-lg p-3 border border-green-200">
+                <div class="text-2xl mb-1">✅</div>
+                <div class="text-xs text-green-700">OK</div>
+                <div id="adminOkCount" class="text-lg font-bold text-green-700">0</div>
+              </div>
+              <div class="bg-red-50 rounded-lg p-3 border border-red-200">
+                <div class="text-2xl mb-1">❌</div>
+                <div class="text-xs text-red-700">NG</div>
+                <div id="adminNgCount" class="text-lg font-bold text-red-700">0</div>
+              </div>
+              <div class="bg-yellow-50 rounded-lg p-3 border border-yellow-200">
+                <div class="text-2xl mb-1">🔧</div>
+                <div class="text-xs text-yellow-700">REPAIR</div>
+                <div id="adminRepairCount" class="text-lg font-bold text-yellow-700">0</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Records Table -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-100">
+                <tr>
+                  <th class="text-left py-3 px-4 font-semibold text-gray-800">VIN</th>
+                  <th class="text-left py-3 px-4 font-semibold text-gray-800">รุ่น</th>
+                  <th class="text-left py-3 px-4 font-semibold text-gray-800">สี</th>
+                  <th class="text-left py-3 px-4 font-semibold text-gray-800">สถานะ</th>
+                  <th class="text-left py-3 px-4 font-semibold text-gray-800">ผู้ตรวจ</th>
+                  <th class="text-left py-3 px-4 font-semibold text-gray-800">เวลา</th>
+                  <th class="text-left py-3 px-4 font-semibold text-gray-800">PDI Status</th>
+                  <th class="text-left py-3 px-4 font-semibold text-gray-800">การจัดการ</th>
+                </tr>
+              </thead>
+              <tbody id="adminRecordsTable">
+                <tr>
+                  <td colspan="8" class="py-8 text-center text-gray-500">กำลังโหลดข้อมูล...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- User Management Section -->
+    <div id="section-user" class="tab-content hidden">
+      <div class="bg-white rounded-2xl shadow-lg p-6">
+        <div class="flex items-center justify-between mb-6">
+          <h2 class="text-2xl font-bold text-gray-900">👥 จัดการผู้ใช้งาน</h2>
+          <button onclick="addUser()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg">
+            ➕ เพิ่มผู้ใช้
+          </button>
+        </div>
+
+        <!-- User Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
+            <div class="text-2xl mb-1">👥</div>
+            <div class="text-sm text-blue-700">ทั้งหมด</div>
+            <div class="text-xl font-bold text-blue-700">4</div>
+          </div>
+          <div class="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+            <div class="text-2xl mb-1">🟢</div>
+            <div class="text-sm text-green-700">ใช้งานได้</div>
+            <div class="text-xl font-bold text-green-700">3</div>
+          </div>
+          <div class="bg-purple-50 border border-purple-200 rounded-xl p-4 text-center">
+            <div class="text-2xl mb-1">👑</div>
+            <div class="text-sm text-purple-700">Admin</div>
+            <div class="text-xl font-bold text-purple-700">1</div>
+          </div>
+          <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+            <div class="text-2xl mb-1">📊</div>
+            <div class="text-sm text-amber-700">ออนไลน์</div>
+            <div class="text-xl font-bold text-amber-700">1</div>
+          </div>
+        </div>
+
+        <!-- Users Table -->
+        <div class="border border-gray-200 rounded-xl overflow-hidden">
+          <div class="bg-gray-50 px-4 py-3 border-b">
+            <h4 class="font-semibold text-gray-800">รายชื่อผู้ใช้งาน</h4>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-100">
+                <tr>
+                  <th class="text-left py-3 px-4">ผู้ใช้</th>
+                  <th class="text-left py-3 px-4">ระดับ</th>
+                  <th class="text-left py-3 px-4">แผนก</th>
+                  <th class="text-left py-3 px-4">สถานะ</th>
+                  <th class="text-left py-3 px-4">การจัดการ</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="border-b hover:bg-gray-50">
+                  <td class="py-3 px-4">
+                    <div class="flex items-center gap-3">
+                      <div class="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center text-white font-bold text-sm">ผ</div>
+                      <div>
+                        <div class="font-medium">ผู้ดูแลระบบ</div>
+                        <div class="text-xs text-gray-500">@admin</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td class="py-3 px-4">
+                    <span class="px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-700">👑 ADMIN</span>
+                  </td>
+                  <td class="py-3 px-4">IT</td>
+                  <td class="py-3 px-4">
+                    <span class="px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-700">🟢 ใช้งานได้</span>
+                  </td>
+                  <td class="py-3 px-4">
+                    <button class="text-blue-600 hover:text-blue-800 text-sm mr-2">✏️ แก้ไข</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed top-4 right-4 hidden px-4 py-2 rounded-lg text-white shadow z-50"></div>
+
+  <!-- Camera Modal -->
+  <div id="cameraModal" class="fixed inset-0 bg-black bg-opacity-75 hidden items-center justify-center z-50 p-4">
+    <div class="bg-white rounded-xl max-w-2xl w-full max-h-full overflow-auto">
+      <div class="p-4 border-b flex items-center justify-between">
+        <h3 class="text-lg font-bold text-gray-900">📷 สแกน QR Code</h3>
+        <button onclick="closeCamera()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+      </div>
+      <div class="p-4">
+        <div class="relative">
+          <video id="cameraVideo" autoplay playsinline class="w-full rounded-lg bg-gray-100"></video>
+          <canvas id="cameraCanvas" class="hidden"></canvas>
+          <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div class="border-2 border-white border-dashed w-64 h-64 rounded-lg"></div>
+          </div>
+        </div>
+        <div id="scanStatus" class="mt-4 text-center text-gray-600">🔍 กำลังสแกน...</div>
+      </div>
+      <div class="p-4 border-t bg-gray-50 flex gap-2 justify-center">
+        <button onclick="closeCamera()" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg">
+          ❌ ปิดกล้อง
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Firebase configuration -- UPDATED
+    const firebaseConfig = {
+      apiKey: "AIzaSyAvQdJ8pPjUudJspWBKR6UB7ctsqBp4WFQ",
+      authDomain: "psservice-bce2f.firebaseapp.com",
+      databaseURL: "https://psservice-bce2f-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "psservice-bce2f",
+      storageBucket: "psservice-bce2f.firebasestorage.app",
+      messagingSenderId: "718173959958",
+      appId: "1:718173959958:web:a1e6a184d35f313fd4c237",
+      measurementId: "G-10SD4WP72H"
+    };
+
+    // Initialize Firebase
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    // Global variables
+    let currentVin = '';
+    let selectedStatus = '';
+    let photoData = { 1: null, 2: null, 3: null };
+    let records = [];
+    let defectCards = [];
+    let defectCardCounter = 0;
+
+    // Helper function
+    const $ = (id) => document.getElementById(id);
+
+    // Initialize app
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('App initializing...');
+      updateTime();
+      setInterval(updateTime, 1000);
+      loadRecords();
+      
+      // Set default dates
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('dashDate').value = today;
+      document.getElementById('pdiDate').value = today;
+      document.getElementById('adminRecordsDate').value = today;
+    });
+
+    // Tab navigation function
+    function switchTab(tabName) {
+      console.log('Switching to tab:', tabName);
+      
+      // Hide all tab contents
+      const allSections = document.querySelectorAll('.tab-content');
+      allSections.forEach(section => {
+        section.classList.add('hidden');
+      });
+      
+      // Remove active class from all tabs
+      const allTabs = document.querySelectorAll('.tab-btn');
+      allTabs.forEach(tab => {
+        tab.classList.remove('active-tab');
+      });
+      
+      // Show selected tab content
+      const targetSection = document.getElementById(`section-${tabName}`);
+      if (targetSection) {
+        targetSection.classList.remove('hidden');
+        console.log('Showing section:', `section-${tabName}`);
+      } else {
+        console.error('Section not found:', `section-${tabName}`);
+      }
+      
+      // Add active class to selected tab
+      const targetTab = document.getElementById(`tab-${tabName}`);
+      if (targetTab) {
+        targetTab.classList.add('active-tab');
+        console.log('Activated tab:', `tab-${tabName}`);
+      } else {
+        console.error('Tab not found:', `tab-${tabName}`);
+      }
+      
+      // Initialize tab-specific data
+      if (tabName === 'dashboard') {
+        refreshDashboard();
+      } else if (tabName === 'pdi') {
+        refreshPdi();
+      } else if (tabName === 'admin') {
+        refreshAdminRecords();
+      }
+    }
+
+    // Firebase functions
+    function loadRecords() {
+      console.log('Loading records from Firebase...');
+      
+      // Monitor connection status
+      database.ref('.info/connected').on('value', (snapshot) => {
+        const connected = snapshot.val();
+        const statusEl = document.getElementById('connectionStatus');
+        if (connected) {
+          statusEl.className = 'text-sm px-3 py-1 rounded-full bg-emerald-100 text-emerald-800';
+          statusEl.textContent = '🌐 Firebase เชื่อมต่อแล้ว';
+          console.log('Firebase connected');
+        } else {
+          statusEl.className = 'text-sm px-3 py-1 rounded-full bg-red-100 text-red-800';
+          statusEl.textContent = '❌ ขาดการเชื่อมต่อ';
+          console.log('Firebase disconnected');
+        }
+      });
+
+      // Load records
+      database.ref('pdi_records').on('value', (snapshot) => {
+        const data = snapshot.val();
+        records = data ? Object.values(data) : [];
+        console.log('Records loaded:', records.length);
+        
+        // Update UI based on active tab
+        const activeTab = document.querySelector('.tab-btn.active-tab');
+        if (activeTab && activeTab.id === 'tab-dashboard') {
+          refreshDashboard();
+        } else if (activeTab && activeTab.id === 'tab-pdi') {
+          refreshPdi();
+        }
+      });
+    }
+
+    function saveToFirebase(record) {
+      const recordRef = database.ref('pdi_records').push();
+      return recordRef.set(record);
+    }
+
+    // Utility functions
+    function showToast(message, type = 'success') {
+      const toast = document.getElementById('toast');
+      toast.textContent = message;
+      toast.className = `fixed top-4 right-4 px-4 py-2 rounded-lg text-white shadow z-50 ${
+        type === 'success' ? 'bg-green-600' : 'bg-red-600'
+      }`;
+      toast.classList.remove('hidden');
+      setTimeout(() => {
+        toast.classList.add('hidden');
+      }, 3000);
+    }
+
+    function updateTime() {
+      document.getElementById('currentTime').textContent = new Date().toLocaleString('th-TH');
+    }
+
+    // QC Functions
+    function searchVin() {
+      const vin = document.getElementById('vinInput').value.trim();
+      if (!vin) {
+        showToast('กรุณาใส่ VIN', 'error');
+        return;
+      }
+      
+      currentVin = vin;
+      
+      // Show sections
+      document.getElementById('carStatus').classList.remove('hidden');
+      document.getElementById('statusSection').classList.remove('hidden');
+      
+      // Search for existing records
+      const vinRecords = records.filter(r => r.vin === vin);
+      const statusContent = document.getElementById('carStatusContent');
+      
+      if (vinRecords.length > 0) {
+        const latest = vinRecords[vinRecords.length - 1];
+        statusContent.innerHTML = `
+          <div class="text-blue-700">
+            <div><strong>VIN:</strong> ${vin}</div>
+            <div><strong>สถานะล่าสุด:</strong> ${latest.status}</div>
+            <div><strong>ตรวจครั้งที่:</strong> ${vinRecords.length}</div>
+            <div><strong>เวลาล่าสุด:</strong> ${new Date(latest.timestamp).toLocaleString('th-TH')}</div>
+          </div>
+        `;
+      } else {
+        statusContent.innerHTML = `
+          <div class="text-blue-700">
+            <div><strong>VIN:</strong> ${vin}</div>
+            <div><strong>สถานะ:</strong> รถใหม่ ยังไม่เคยตรวจสอบ</div>
+          </div>
+        `;
+      }
+      
+      updateSaveButton();
+    }
+
+    // Camera / QR
+    let cameraStream = null;
+    function openCamera(){
+      const modal = $('cameraModal'); modal.classList.remove('hidden'); modal.classList.add('flex'); startCamera();
+    }
+    function closeCamera(){
+      const modal = $('cameraModal'); modal.classList.add('hidden'); modal.classList.remove('flex'); stopCamera();
+    }
+    function stopCamera(){ if (cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream=null; } $('scanStatus').textContent='🔍 กำลังสแกน...'; }
+    async function startCamera(){
+      const video = $('cameraVideo'); const scanStatus = $('scanStatus');
+      try{
+        cameraStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' }, audio:false });
+        video.srcObject = cameraStream;
+        video.onloadedmetadata = () => { scanStatus.textContent='🔍 กำลังสแกน...'; requestAnimationFrame(scanFrame); };
+      }catch(e){ scanStatus.textContent='❌ ไม่สามารถเปิดกล้องได้'; showToast('ตรวจสิทธิ์กล้อง', 'error'); }
+    }
+    function scanFrame(){
+      const video = $('cameraVideo'); if (!cameraStream) return;
+      if (video.readyState===video.HAVE_ENOUGH_DATA){
+        const canvas = $('cameraCanvas'); const ctx=canvas.getContext('2d');
+        canvas.width = video.videoWidth||640; canvas.height = video.videoHeight||480;
+        ctx.drawImage(video,0,0,canvas.width,canvas.height);
+        const img = ctx.getImageData(0,0,canvas.width,canvas.height);
+        const code = jsQR(img.data, img.width, img.height, { inversionAttempts:'dontInvert' });
+        if (code && code.data){
+          $('scanStatus').textContent = '✅ พบ QR';
+          $('vinInput').value = code.data.trim();
+          setTimeout(()=>{ closeCamera(); showToast(`สแกนสำเร็จ: ${code.data}`,'success'); searchVin(); }, 250);
+          return;
+        }
+      }
+      requestAnimationFrame(scanFrame);
+    }
+
+    function selectPhoto(slot) {
+      document.getElementById(`photo${slot}-input`).click();
+    }
+
+    function clearPhoto(slot) {
+      photoData[slot] = null;
+      document.getElementById(`photo${slot}-img`).classList.add('hidden');
+      document.getElementById(`photo${slot}-placeholder`).classList.remove('hidden');
+      updateSaveButton();
+    }
+
+    function handlePhotoUpload(event, slot) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            showToast('กรุณาเลือกไฟล์รูปภาพ', 'error');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+
+                // Set the canvas to the desired dimensions
+                const MAX_WIDTH = 800;
+                const MAX_HEIGHT = 800;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width *= MAX_HEIGHT / height;
+                        height = MAX_HEIGHT;
+                    }
+                }
+                canvas.width = width;
+                canvas.height = height;
+
+                // Draw the image onto the canvas
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // Get the data URL of the compressed image
+                // Use 'image/jpeg' for compression, 0.7 is a good quality/size ratio
+                const compressedImageData = canvas.toDataURL('image/jpeg', 0.7);
+
+                photoData[slot] = compressedImageData;
+
+                // Show image preview
+                const imgElement = document.getElementById(`photo${slot}-img`);
+                const placeholderElement = document.getElementById(`photo${slot}-placeholder`);
+
+                imgElement.src = compressedImageData;
+                imgElement.classList.remove('hidden');
+                placeholderElement.classList.add('hidden');
+
+                updateSaveButton();
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function selectStatus(status) {
+      selectedStatus = status;
+      
+      // Update button styles
+      document.querySelectorAll('.status-btn').forEach(btn => {
+        btn.classList.remove('ring-4', 'ring-white', 'ring-opacity-60');
+      });
+      document.getElementById(`status-${status}`).classList.add('ring-4', 'ring-white', 'ring-opacity-60');
+      
+      // Show/hide damage section
+      document.getElementById('damageSection').classList.toggle('hidden', status !== 'NG');
+      
+      updateSaveButton();
+    }
+
+    function updateSaveButton() {
+      const hasVin = currentVin.trim() !== '';
+      const hasStatus = selectedStatus !== '';
+      const hasAllPhotos = photoData[1] && photoData[2] && photoData[3];
+      
+      document.getElementById('saveBtn').disabled = !(hasVin && hasStatus && hasAllPhotos);
+      document.getElementById('photoHint').classList.toggle('hidden', hasAllPhotos);
+    }
+
+    function saveRecord() {
+      if (!currentVin || !selectedStatus) {
+        showToast('กรุณากรอกข้อมูลให้ครบถ้วน', 'error');
+        return;
+      }
+      
+      const hasAllPhotos = photoData[1] && photoData[2] && photoData[3];
+      if (!hasAllPhotos) {
+        showToast('กรุณาอัปโหลดรูปภาพให้ครบทั้ง 3 รูป', 'error');
+        return;
+      }
+      
+      const record = {
+        id: Date.now(),
+        vin: currentVin,
+        status: selectedStatus,
+        defects: [...defectCards],
+        timestamp: new Date().toISOString(),
+        inspector: 'ผู้ดูแลระบบ',
+        photos: { ...photoData }
+      };
+      
+      // Add to local records array immediately for instant UI update
+      records.push(record);
+      
+      // Update PDI Operation if it's currently active
+      const activeTab = document.querySelector('.tab-btn.active-tab');
+      if (activeTab && activeTab.id === 'tab-pdi') {
+        refreshPdi();
+      }
+      
+      // Show success message
+      const statusEmoji = selectedStatus === 'OK' ? '✅' : selectedStatus === 'NG' ? '❌' : '🔧';
+      showToast(`${statusEmoji} บันทึกสำเร็จ! VIN: ${currentVin} | ข้อมูลแสดงใน PDI Operation แล้ว ⚡`);
+      
+      // Reset form
+      resetQcForm();
+      
+      // Focus for next car
+      document.getElementById('vinInput').focus();
+      
+      // Save to Firebase
+      saveToFirebase(record).catch((error) => {
+        console.error('Save error:', error);
+        showToast('เกิดข้อผิดพลาดในการบันทึก', 'error');
+      });
+    }
+
+    function resetQcForm() {
+      currentVin = '';
+      selectedStatus = '';
+      photoData = { 1: null, 2: null, 3: null };
+      defectCards = [];
+      defectCardCounter = 0;
+      
+      document.getElementById('vinInput').value = '';
+      document.getElementById('carStatus').classList.add('hidden');
+      document.getElementById('statusSection').classList.add('hidden');
+      document.getElementById('damageSection').classList.add('hidden');
+      
+      // Reset defect cards
+      document.getElementById('defectCardsContainer').innerHTML = '';
+      document.getElementById('noDefectMessage').classList.remove('hidden');
+      
+      // Reset photos
+      for (let i = 1; i <= 3; i++) {
+        document.getElementById(`photo${i}-img`).classList.add('hidden');
+        document.getElementById(`photo${i}-placeholder`).classList.remove('hidden');
+        document.getElementById(`photo${i}-input`).value = '';
+      }
+      
+      // Reset status buttons
+      document.querySelectorAll('.status-btn').forEach(btn => {
+        btn.classList.remove('ring-4', 'ring-white', 'ring-opacity-60');
+      });
+      
+      updateSaveButton();
+    }
+
+    // Defect Card Management Functions
+    function addDefectCard() {
+      defectCardCounter++;
+      const cardId = `defect-${defectCardCounter}`;
+      
+      const defectCard = {
+        id: cardId,
+        position: `Position ${defectCardCounter}`,
+        stockStatus: '',
+        categoryDefect: '',
+        defectDescription: '',
+        ngStatus: '',
+        statusRepair: '',
+        repairDate: ''
+      };
+      
+      defectCards.push(defectCard);
+      renderDefectCards();
+      
+      // Hide no defect message
+      document.getElementById('noDefectMessage').classList.add('hidden');
+      
+      showToast(`✅ เพิ่มตำแหน่งความเสียหาย ${defectCard.position} แล้ว`, 'success');
+    }
+
+    function removeDefectCard(cardId) {
+      defectCards = defectCards.filter(card => card.id !== cardId);
+      renderDefectCards();
+      
+      // Show no defect message if no cards left
+      if (defectCards.length === 0) {
+        document.getElementById('noDefectMessage').classList.remove('hidden');
+      }
+      
+      showToast('🗑️ ลบตำแหน่งความเสียหายแล้ว', 'success');
+    }
+
+    function updateDefectCard(cardId, field, value) {
+      const card = defectCards.find(c => c.id === cardId);
+      if (card) {
+        card[field] = value;
+      }
+    }
+
+    function renderDefectCards() {
+      const container = document.getElementById('defectCardsContainer');
+      
+      container.innerHTML = defectCards.map(card => `
+        <div class="bg-white border-2 border-red-200 rounded-xl p-6 relative">
+          <div class="flex items-center justify-between mb-4">
+            <h4 class="text-lg font-bold text-red-800 flex items-center gap-2">
+              🔧 ${card.position}
+            </h4>
+            <button onclick="removeDefectCard('${card.id}')" class="text-red-500 hover:text-red-700 bg-red-100 hover:bg-red-200 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+              ✕
+            </button>
+          </div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Stock Status -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Stock Status</label>
+              <select onchange="updateDefectCard('${card.id}', 'stockStatus', this.value)" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                <option value="">เลือกสถานะ</option>
+                <option value="IN_STOCK" ${card.stockStatus === 'IN_STOCK' ? 'selected' : ''}>📦 IN STOCK</option>
+                <option value="OUT_OF_STOCK" ${card.stockStatus === 'OUT_OF_STOCK' ? 'selected' : ''}>📭 OUT OF STOCK</option>
+                <option value="PENDING" ${card.stockStatus === 'PENDING' ? 'selected' : ''}>⏳ PENDING</option>
+                <option value="ORDERED" ${card.stockStatus === 'ORDERED' ? 'selected' : ''}>🛒 ORDERED</option>
+              </select>
+            </div>
+            
+            <!-- Category Defect -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Category Defect</label>
+              <select onchange="updateDefectCard('${card.id}', 'categoryDefect', this.value)" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                <option value="">เลือกหมวดหมู่</option>
+                <option value="PAINT" ${card.categoryDefect === 'PAINT' ? 'selected' : ''}>🎨 PAINT</option>
+                <option value="BODY" ${card.categoryDefect === 'BODY' ? 'selected' : ''}>🚗 BODY</option>
+                <option value="INTERIOR" ${card.categoryDefect === 'INTERIOR' ? 'selected' : ''}>🪑 INTERIOR</option>
+                <option value="ELECTRICAL" ${card.categoryDefect === 'ELECTRICAL' ? 'selected' : ''}>⚡ ELECTRICAL</option>
+                <option value="MECHANICAL" ${card.categoryDefect === 'MECHANICAL' ? 'selected' : ''}>🔧 MECHANICAL</option>
+                <option value="GLASS" ${card.categoryDefect === 'GLASS' ? 'selected' : ''}>🪟 GLASS</option>
+                <option value="TRIM" ${card.categoryDefect === 'TRIM' ? 'selected' : ''}>✨ TRIM</option>
+                <option value="OTHER" ${card.categoryDefect === 'OTHER' ? 'selected' : ''}>📋 OTHER</option>
+              </select>
+            </div>
+            
+            <!-- NG Status -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">NG Status</label>
+              <select onchange="updateDefectCard('${card.id}', 'ngStatus', this.value)" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                <option value="">เลือกสถานะ NG</option>
+                <option value="MINOR" ${card.ngStatus === 'MINOR' ? 'selected' : ''}>🟡 MINOR</option>
+                <option value="MAJOR" ${card.ngStatus === 'MAJOR' ? 'selected' : ''}>🟠 MAJOR</option>
+                <option value="CRITICAL" ${card.ngStatus === 'CRITICAL' ? 'selected' : ''}>🔴 CRITICAL</option>
+                <option value="COSMETIC" ${card.ngStatus === 'COSMETIC' ? 'selected' : ''}>💄 COSMETIC</option>
+              </select>
+            </div>
+            
+            <!-- Status Repair -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Status Repair</label>
+              <select onchange="updateDefectCard('${card.id}', 'statusRepair', this.value)" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+                <option value="">เลือกสถานะซ่อม</option>
+                <option value="NOT_STARTED" ${card.statusRepair === 'NOT_STARTED' ? 'selected' : ''}>⏸️ NOT STARTED</option>
+                <option value="IN_PROGRESS" ${card.statusRepair === 'IN_PROGRESS' ? 'selected' : ''}>🔄 IN PROGRESS</option>
+                <option value="COMPLETED" ${card.statusRepair === 'COMPLETED' ? 'selected' : ''}>✅ COMPLETED</option>
+                <option value="ON_HOLD" ${card.statusRepair === 'ON_HOLD' ? 'selected' : ''}>⏸️ ON HOLD</option>
+                <option value="CANCELLED" ${card.statusRepair === 'CANCELLED' ? 'selected' : ''}>❌ CANCELLED</option>
+              </select>
+            </div>
+            
+            <!-- Repair Date -->
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-2">Repair Date</label>
+              <input type="date" value="${card.repairDate}" onchange="updateDefectCard('${card.id}', 'repairDate', this.value)" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+            </div>
+          </div>
+          
+          <!-- Defect Description -->
+          <div class="mt-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">รายละเอียดความเสียหาย</label>
+            <textarea rows="3" placeholder="ระบุรายละเอียดความเสียหายในตำแหน่งนี้..." value="${card.defectDescription}" onchange="updateDefectCard('${card.id}', 'defectDescription', this.value)" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500">${card.defectDescription}</textarea>
+          </div>
+          
+          <!-- Status Summary -->
+          <div class="mt-4 p-3 bg-gray-50 rounded-lg">
+            <div class="text-sm text-gray-600">
+              <strong>สรุปสถานะ:</strong> 
+              ${card.stockStatus ? `📦 ${card.stockStatus}` : '📦 -'} | 
+              ${card.categoryDefect ? `🔧 ${card.categoryDefect}` : '🔧 -'} | 
+              ${card.ngStatus ? `⚠️ ${card.ngStatus}` : '⚠️ -'} | 
+              ${card.statusRepair ? `🔨 ${card.statusRepair}` : '🔨 -'}
+              ${card.repairDate ? ` | 📅 ${new Date(card.repairDate).toLocaleDateString('th-TH')}` : ''}
+            </div>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    // Dashboard Functions
+    function refreshDashboard() {
+      const selectedDate = document.getElementById('dashDate').value;
+      let filteredRecords = records;
+      
+      if (selectedDate) {
+        filteredRecords = records.filter(record => {
+          const recordDate = new Date(record.timestamp).toISOString().split('T')[0];
+          return recordDate === selectedDate;
+        });
+      }
+      
+      // Get latest record per VIN
+      const latestByVin = {};
+      filteredRecords.forEach(record => {
+        if (!latestByVin[record.vin] || new Date(record.timestamp) > new Date(latestByVin[record.vin].timestamp)) {
+          latestByVin[record.vin] = record;
+        }
+      });
+      
+      const latestRecords = Object.values(latestByVin);
+      
+      // Update stats
+      const okCount = latestRecords.filter(r => r.status === 'OK').length;
+      const ngCount = latestRecords.filter(r => r.status === 'NG').length;
+      const repairCount = latestRecords.filter(r => r.status === 'REPAIR').length;
+      
+      document.getElementById('dashOk').textContent = okCount;
+      document.getElementById('dashNg').textContent = ngCount;
+      document.getElementById('dashRepair').textContent = repairCount;
+      
+      // Update work period analysis tables
+      updateWorkPeriodTables(filteredRecords);
+      
+      // Update table
+      const tbody = document.getElementById('dashTable');
+      if (latestRecords.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-gray-500">ไม่มีข้อมูล</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = latestRecords
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        .map(record => {
+          const statusColor = record.status === 'OK' ? 'text-green-700' : 
+                                record.status === 'NG' ? 'text-red-700' : 'text-yellow-700';
+          return `
+            <tr class="border-b hover:bg-gray-50">
+              <td class="py-2 px-4 font-medium">${record.vin}</td>
+              <td class="py-2 px-4">${record.adminData?.carModel || 'รออัพเดท'}</td>
+              <td class="py-2 px-4">${record.adminData?.carColor || 'รออัพเดท'}</td>
+              <td class="py-2 px-4 ${statusColor}">${record.status}</td>
+              <td class="py-2 px-4">${new Date(record.timestamp).toLocaleString('th-TH')}</td>
+            </tr>
+          `;
+        }).join('');
+    }
+
+    function updateWorkPeriodTables(filteredRecords) {
+      const periods = [
+        { name: 'P1', start: 9, end: 10.5 },
+        { name: 'P2', start: 10.67, end: 12.5 },
+        { name: 'P3', start: 13.5, end: 15.5 },
+        { name: 'P4', start: 15.67, end: 18 },
+        { name: 'P5', start: 18.5, end: 20.5 }
+      ];
+
+      const carModels = ['DOLPHIN', 'SEAL5 DM-I', 'SEALION 6 DM-I', 'ATTO3', 'รออัพเดท'];
+      
+      const okngData = {}, repairData = {}, totalData = {};
+      
+      carModels.forEach(model => {
+        okngData[model] = { P1: 0, P2: 0, P3: 0, P4: 0, P5: 0, total: 0 };
+        repairData[model] = { P1: 0, P2: 0, P3: 0, P4: 0, P5: 0, total: 0 };
+        totalData[model] = { P1: 0, P2: 0, P3: 0, P4: 0, P5: 0, total: 0 };
+      });
+
+      filteredRecords.forEach(record => {
+        const recordTime = new Date(record.timestamp);
+        const hour = recordTime.getHours() + recordTime.getMinutes() / 60;
+        const carModel = record.adminData?.carModel || 'รออัพเดท';
+        
+        let period = null;
+        periods.forEach(p => {
+          if (hour >= p.start && hour < p.end) {
+            period = p.name;
+          }
+        });
+        
+        if (period && carModels.includes(carModel)) {
+          if (record.status === 'OK' || record.status === 'NG') {
+            okngData[carModel][period]++;
+            okngData[carModel].total++;
+          }
+          if (record.status === 'REPAIR') {
+            repairData[carModel][period]++;
+            repairData[carModel].total++;
+          }
+          totalData[carModel][period]++;
+          totalData[carModel].total++;
+        }
+      });
+
+      const combinedTableBody = document.getElementById('combinedTable');
+      combinedTableBody.innerHTML = carModels.map(model => {
+        if (totalData[model].total === 0) {
+            return ''; // Hide row if no data
+        }
+        return `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="py-3 px-4 font-medium text-gray-800 border-r border-gray-200">${model}</td>
+          <td class="py-3 px-2 text-center text-xs ${okngData[model].P1 > 0 ? 'bg-green-100 font-semibold' : ''}">${okngData[model].P1}</td>
+          <td class="py-3 px-2 text-center text-xs ${okngData[model].P2 > 0 ? 'bg-green-100 font-semibold' : ''}">${okngData[model].P2}</td>
+          <td class="py-3 px-2 text-center text-xs ${okngData[model].P3 > 0 ? 'bg-green-100 font-semibold' : ''}">${okngData[model].P3}</td>
+          <td class="py-3 px-2 text-center text-xs ${okngData[model].P4 > 0 ? 'bg-green-100 font-semibold' : ''}">${okngData[model].P4}</td>
+          <td class="py-3 px-2 text-center text-xs ${okngData[model].P5 > 0 ? 'bg-green-100 font-semibold' : ''}">${okngData[model].P5}</td>
+          <td class="py-3 px-2 text-center text-xs bg-green-200 font-bold text-green-800 border-r border-green-300">${okngData[model].total}</td>
+          <td class="py-3 px-2 text-center text-xs ${repairData[model].P1 > 0 ? 'bg-yellow-100 font-semibold' : ''}">${repairData[model].P1}</td>
+          <td class="py-3 px-2 text-center text-xs ${repairData[model].P2 > 0 ? 'bg-yellow-100 font-semibold' : ''}">${repairData[model].P2}</td>
+          <td class="py-3 px-2 text-center text-xs ${repairData[model].P3 > 0 ? 'bg-yellow-100 font-semibold' : ''}">${repairData[model].P3}</td>
+          <td class="py-3 px-2 text-center text-xs ${repairData[model].P4 > 0 ? 'bg-yellow-100 font-semibold' : ''}">${repairData[model].P4}</td>
+          <td class="py-3 px-2 text-center text-xs ${repairData[model].P5 > 0 ? 'bg-yellow-100 font-semibold' : ''}">${repairData[model].P5}</td>
+          <td class="py-3 px-2 text-center text-xs bg-yellow-200 font-bold text-yellow-800 border-r border-yellow-300">${repairData[model].total}</td>
+          <td class="py-3 px-2 text-center text-xs ${totalData[model].P1 > 0 ? 'bg-blue-100 font-semibold' : ''}">${totalData[model].P1}</td>
+          <td class="py-3 px-2 text-center text-xs ${totalData[model].P2 > 0 ? 'bg-blue-100 font-semibold' : ''}">${totalData[model].P2}</td>
+          <td class="py-3 px-2 text-center text-xs ${totalData[model].P3 > 0 ? 'bg-blue-100 font-semibold' : ''}">${totalData[model].P3}</td>
+          <td class="py-3 px-2 text-center text-xs ${totalData[model].P4 > 0 ? 'bg-blue-100 font-semibold' : ''}">${totalData[model].P4}</td>
+          <td class="py-3 px-2 text-center text-xs ${totalData[model].P5 > 0 ? 'bg-blue-100 font-semibold' : ''}">${totalData[model].P5}</td>
+          <td class="py-3 px-2 text-center text-xs bg-blue-200 font-bold text-blue-800">${totalData[model].total}</td>
+        </tr>
+      `;
+      }).join('');
+
+      const periodTotals = { P1: 0, P2: 0, P3: 0, P4: 0, P5: 0, total: 0 };
+      const repairPeriodTotals = { P1: 0, P2: 0, P3: 0, P4: 0, P5: 0, total: 0 };
+      const totalPeriodTotals = { P1: 0, P2: 0, P3: 0, P4: 0, P5: 0, total: 0 };
+
+      carModels.forEach(model => {
+        ['P1', 'P2', 'P3', 'P4', 'P5', 'total'].forEach(period => {
+          periodTotals[period] += okngData[model][period];
+          repairPeriodTotals[period] += repairData[model][period];
+          totalPeriodTotals[period] += totalData[model][period];
+        });
+      });
+
+      combinedTableBody.innerHTML += `
+        <tr class="bg-gray-100 font-bold text-gray-900 border-t-2 border-gray-300">
+          <td class="py-3 px-4 border-r border-gray-300">รวมทั้งหมด</td>
+          <td class="py-3 px-2 text-center text-xs bg-green-200 text-green-800">${periodTotals.P1}</td>
+          <td class="py-3 px-2 text-center text-xs bg-green-200 text-green-800">${periodTotals.P2}</td>
+          <td class="py-3 px-2 text-center text-xs bg-green-200 text-green-800">${periodTotals.P3}</td>
+          <td class="py-3 px-2 text-center text-xs bg-green-200 text-green-800">${periodTotals.P4}</td>
+          <td class="py-3 px-2 text-center text-xs bg-green-200 text-green-800">${periodTotals.P5}</td>
+          <td class="py-3 px-2 text-center text-xs bg-green-300 text-green-900 border-r border-green-400">${periodTotals.total}</td>
+          <td class="py-3 px-2 text-center text-xs bg-yellow-200 text-yellow-800">${repairPeriodTotals.P1}</td>
+          <td class="py-3 px-2 text-center text-xs bg-yellow-200 text-yellow-800">${repairPeriodTotals.P2}</td>
+          <td class="py-3 px-2 text-center text-xs bg-yellow-200 text-yellow-800">${repairPeriodTotals.P3}</td>
+          <td class="py-3 px-2 text-center text-xs bg-yellow-200 text-yellow-800">${repairPeriodTotals.P4}</td>
+          <td class="py-3 px-2 text-center text-xs bg-yellow-200 text-yellow-800">${repairPeriodTotals.P5}</td>
+          <td class="py-3 px-2 text-center text-xs bg-yellow-300 text-yellow-900 border-r border-yellow-400">${repairPeriodTotals.total}</td>
+          <td class="py-3 px-2 text-center text-xs bg-blue-200 text-blue-800">${totalPeriodTotals.P1}</td>
+          <td class="py-3 px-2 text-center text-xs bg-blue-200 text-blue-800">${totalPeriodTotals.P2}</td>
+          <td class="py-3 px-2 text-center text-xs bg-blue-200 text-blue-800">${totalPeriodTotals.P3}</td>
+          <td class="py-3 px-2 text-center text-xs bg-blue-200 text-blue-800">${totalPeriodTotals.P4}</td>
+          <td class="py-3 px-2 text-center text-xs bg-blue-200 text-blue-800">${totalPeriodTotals.P5}</td>
+          <td class="py-3 px-2 text-center text-xs bg-blue-300 text-blue-900">${totalPeriodTotals.total}</td>
+        </tr>
+      `;
+    }
+
+    // PDI Functions
+    function refreshPdi() {
+      const selectedDate = document.getElementById('pdiDate').value;
+      let filteredRecords = records;
+      
+      if (selectedDate) {
+        filteredRecords = records.filter(record => {
+          const recordDate = new Date(record.timestamp).toISOString().split('T')[0];
+          return recordDate === selectedDate;
+        });
+      }
+      
+      // Get latest record per VIN
+      const latestByVin = {};
+      filteredRecords.forEach(record => {
+        if (!latestByVin[record.vin] || new Date(record.timestamp) > new Date(latestByVin[record.vin].timestamp)) {
+          latestByVin[record.vin] = record;
+        }
+      });
+      
+      const latestRecords = Object.values(latestByVin);
+      
+      // Separate pending and completed based on pdiCompleted flag
+      const pending = latestRecords.filter(record => !record.pdiCompleted);
+      const completed = latestRecords.filter(record => record.pdiCompleted);
+      
+      // Update counts
+      document.getElementById('pendingCount').textContent = pending.length;
+      document.getElementById('completedCount').textContent = completed.length;
+      
+      // Update progress bar
+      const progressPercent = latestRecords.length > 0 ? Math.round((completed.length / latestRecords.length) * 100) : 0;
+      document.getElementById('progressBar').style.width = `${progressPercent}%`;
+      document.getElementById('progressText').textContent = `${completed.length}/${latestRecords.length} (${progressPercent}%)`;
+      
+      // Update pending list
+      const pendingList = document.getElementById('pendingList');
+      if (pending.length === 0) {
+        pendingList.innerHTML = `
+          <div class="text-center text-gray-500 py-8">
+            <div class="text-4xl mb-2">🚗</div>
+            <div>ไม่มีรถที่รอตรวจสอบ</div>
+          </div>
+        `;
+      } else {
+        pendingList.innerHTML = pending
+          .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+          .map(record => createPdiCard(record, 'pending')).join('');
+      }
+      
+      // Update completed list
+      filterCompleted();
+    }
+
+    function filterCompleted() {
+      const selectedDate = document.getElementById('pdiDate').value;
+      const statusFilter = document.getElementById('statusFilter').value;
+      
+      let filteredRecords = records;
+      
+      if (selectedDate) {
+        filteredRecords = records.filter(record => {
+          const recordDate = new Date(record.timestamp).toISOString().split('T')[0];
+          return recordDate === selectedDate;
+        });
+      }
+      
+      // Get latest record per VIN
+      const latestByVin = {};
+      filteredRecords.forEach(record => {
+        if (!latestByVin[record.vin] || new Date(record.timestamp) > new Date(latestByVin[record.vin].timestamp)) {
+          latestByVin[record.vin] = record;
+        }
+      });
+      
+      const latestRecords = Object.values(latestByVin);
+      
+      // Filter completed records
+      let completed = latestRecords.filter(record => record.pdiCompleted);
+      
+      // Apply status filter
+      if (statusFilter !== 'all') {
+        completed = completed.filter(record => record.status === statusFilter);
+      }
+      
+      const completedList = document.getElementById('completedList');
+      if (completed.length === 0) {
+        completedList.innerHTML = `
+          <div class="text-center text-gray-500 py-8">
+            <div class="text-4xl mb-2">📋</div>
+            <div>ยังไม่มีรถที่ตรวจสอบแล้ว</div>
+            <div class="text-xs mt-2">รถจะมาอยู่ที่นี่หลังจากทำ PDI เสร็จ</div>
+          </div>
+        `;
+      } else {
+        completedList.innerHTML = completed
+          .sort((a, b) => new Date(b.lastModified || b.timestamp) - new Date(a.lastModified || a.timestamp))
+          .map(record => createPdiCard(record, 'completed')).join('');
+      }
+    }
+
+    function quickAction(action) {
+      switch(action) {
+        case 'add':
+          showToast('🚧 ฟีเจอร์เพิ่มรถใหม่กำลังพัฒนา', 'error');
+          break;
+        case 'scan':
+          showToast('🚧 ฟีเจอร์สแกน QR กำลังพัฒนา', 'error');
+          break;
+        case 'batch':
+          showToast('🚧 ฟีเจอร์ตรวจแบบกลุ่มกำลังพัฒนา', 'error');
+          break;
+        case 'report':
+          showToast('🚧 ฟีเจอร์รายงานกำลังพัฒนา', 'error');
+          break;
+      }
+    }
+
+    function createCarCard(record, type) {
+      const borderColor = type === 'pending' ? 'border-yellow-200 bg-yellow-50' : 
+                          record.status === 'OK' ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50';
+      
+      const statusBadge = record.status === 'OK' ? 'bg-green-100 text-green-800' :
+                          record.status === 'NG' ? 'bg-red-100 text-red-800' :
+                          record.status === 'REPAIR' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800';
+      
+      return `
+        <div class="border-2 ${borderColor} rounded-lg p-4">
+          <div class="flex items-start justify-between mb-3">
+            <div class="font-bold text-gray-900">VIN: ${record.vin}</div>
+            <span class="px-2 py-1 rounded text-xs font-bold ${statusBadge}">
+              ${record.status || 'รอตรวจ'}
+            </span>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-3 text-sm text-gray-700 mb-3">
+            <div><strong>รุ่น:</strong> รออัพเดท</div>
+            <div><strong>สี:</strong> รออัพเดท</div>
+            <div><strong>ผู้ตรวจ:</strong> ${record.inspector}</div>
+            <div><strong>เวลา:</strong> ${new Date(record.timestamp).toLocaleString('th-TH')}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function createPdiCard(record, type) {
+      const isCompleted = type === 'completed';
+      const statusColor = record.status === 'OK' ? 'text-green-700' : 
+                          record.status === 'NG' ? 'text-red-700' : 
+                          record.status === 'REPAIR' ? 'text-yellow-700' : 'text-gray-700';
+      
+      const statusIcon = record.status === 'OK' ? '✅' : 
+                         record.status === 'NG' ? '❌' : 
+                         record.status === 'REPAIR' ? '🔧' : '⏳';
+      
+      const cardBg = isCompleted ? 'bg-white' : 'bg-yellow-50';
+      const borderColor = isCompleted ? 
+        (record.status === 'OK' ? 'border-l-4 border-l-green-500' : 
+         record.status === 'NG' ? 'border-l-4 border-l-red-500' : 'border-l-4 border-l-yellow-500') :
+        'border border-yellow-200';
+      
+      // Create photo gallery if photos exist
+      const photoGallery = record.photos && (record.photos[1] || record.photos[2] || record.photos[3]) ? `
+        <div class="mt-3 mb-3">
+          <div class="text-xs text-gray-600 mb-2 font-medium">📷 รูปภาพประกอบ:</div>
+          <div class="grid grid-cols-3 gap-2">
+            ${record.photos[1] ? `
+              <div class="relative group">
+                <img src="${record.photos[1]}" alt="หน้าปัด" class="w-full h-16 object-cover rounded border cursor-pointer hover:opacity-80" onclick="viewPhoto('${record.photos[1]}', 'หน้าปัด')">
+                <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs px-1 py-0.5 rounded-b">หน้าปัด</div>
+              </div>
+            ` : '<div class="w-full h-16 bg-gray-100 rounded border flex items-center justify-center text-gray-400 text-xs">ไม่มีรูป</div>'}
+            
+            ${record.photos[2] ? `
+              <div class="relative group">
+                <img src="${record.photos[2]}" alt="เลข VIN" class="w-full h-16 object-cover rounded border cursor-pointer hover:opacity-80" onclick="viewPhoto('${record.photos[2]}', 'เลข VIN')">
+                <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs px-1 py-0.5 rounded-b">VIN</div>
+              </div>
+            ` : '<div class="w-full h-16 bg-gray-100 rounded border flex items-center justify-center text-gray-400 text-xs">ไม่มีรูป</div>'}
+            
+            ${record.photos[3] ? `
+              <div class="relative group">
+                <img src="${record.photos[3]}" alt="Check Sheet" class="w-full h-16 object-cover rounded border cursor-pointer hover:opacity-80" onclick="viewPhoto('${record.photos[3]}', 'Check Sheet')">
+                <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs px-1 py-0.5 rounded-b">Sheet</div>
+              </div>
+            ` : '<div class="w-full h-16 bg-gray-100 rounded border flex items-center justify-center text-gray-400 text-xs">ไม่มีรูป</div>'}
+          </div>
+        </div>
+      ` : '';
+      
+      return `
+        <div class="${cardBg} ${borderColor} rounded-lg p-4 hover:shadow-md transition-shadow">
+          <div class="flex items-start justify-between mb-3">
+            <div class="flex items-center gap-2">
+              <span class="text-lg">${statusIcon}</span>
+              <div>
+                <div class="flex items-center gap-2">
+                  <div class="font-bold text-gray-900">VIN: ${record.vin}</div>
+                  <button onclick="copyVin('${record.vin}', this)" class="copy-btn bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded text-xs font-medium transition-all duration-200">
+                    📋 COPY
+                  </button>
+                </div>
+                <div class="text-xs text-gray-500">ID: ${record.id}</div>
+              </div>
+            </div>
+            <div class="text-right">
+              <div class="text-sm ${statusColor} font-semibold">${record.status || 'รอตรวจ'}</div>
+              <div class="text-xs text-gray-500">${new Date(record.timestamp).toLocaleTimeString('th-TH')}</div>
+              ${isCompleted && record.lastModified ? `<div class="text-xs text-green-600">PDI: ${new Date(record.lastModified).toLocaleTimeString('th-TH')}</div>` : ''}
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-3 text-sm text-gray-600 mb-3">
+            <div><span class="text-gray-500">รุ่น:</span> ${record.adminData?.carModel || 'รออัพเดท'}</div>
+            <div><span class="text-gray-500">สี:</span> ${record.adminData?.carColor || 'รออัพเดท'}</div>
+            <div><span class="text-gray-500">ผู้ตรวจ:</span> ${record.inspector}</div>
+            <div><span class="text-gray-500">วันที่:</span> ${new Date(record.timestamp).toLocaleDateString('th-TH')}</div>
+            ${isCompleted && record.adminData?.pdiDate ? `<div><span class="text-gray-500">PDI Date:</span> ${new Date(record.adminData.pdiDate).toLocaleDateString('th-TH')}</div>` : ''}
+            ${isCompleted && record.modifiedBy ? `<div><span class="text-gray-500">PDI โดย:</span> ${record.modifiedBy}</div>` : ''}
+          </div>
+          
+          ${photoGallery}
+          
+          ${record.defects && record.defects.length > 0 ? `
+            <div class="bg-red-50 border border-red-200 rounded-lg p-3 text-sm mt-3">
+              <div class="text-red-700 font-medium mb-2">🔧 ความเสียหาย (${record.defects.length} ตำแหน่ง):</div>
+              <div class="space-y-2">
+                ${record.defects.map((defect, index) => `
+                  <div class="bg-white rounded p-2 border border-red-100">
+                    <div class="font-medium text-red-800">${defect.position}</div>
+                    <div class="text-xs text-gray-600 mt-1">
+                      ${defect.categoryDefect ? `🔧 ${defect.categoryDefect}` : ''} 
+                      ${defect.ngStatus ? `⚠️ ${defect.ngStatus}` : ''} 
+                      ${defect.statusRepair ? `🔨 ${defect.statusRepair}` : ''}
+                    </div>
+                    ${defect.defectDescription ? `<div class="text-red-600 text-xs mt-1">${defect.defectDescription}</div>` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+          
+          ${isCompleted ? `
+            <div class="flex gap-2 mt-3">
+              <button onclick="viewDetails('${record.vin}')" class="flex-1 bg-blue-100 hover:bg-blue-200 text-blue-700 py-1 px-3 rounded text-sm">
+                👁️ ดูรายละเอียด
+              </button>
+              <button onclick="printReport('${record.vin}')" class="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-1 px-3 rounded text-sm">
+                🖨️ พิมพ์
+              </button>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    function viewDetails(vin) {
+      showToast(`🔍 ดูรายละเอียด VIN: ${vin}`, 'success');
+    }
+
+    function printReport(vin) {
+      showToast(`🖨️ พิมพ์รายงาน VIN: ${vin}`, 'success');
+    }
+
+    function startInspection(vin) {
+      // Switch to QC tab and pre-fill VIN
+      document.getElementById('vinInput').value = vin;
+      switchTab('qc');
+      searchVin();
+      showToast(`🔍 เริ่มตรวจสอบ VIN: ${vin}`, 'success');
+    }
+
+    // Admin Functions
+    let currentEditingVin = '';
+    let currentEditingRecord = null;
+    let adminDefectCards = [];
+    let adminDefectCardCounter = 0;
+
+    function adminSearch() {
+      const vin = document.getElementById('adminVin').value.trim();
+      if (!vin) {
+        showToast('กรุณาใส่ VIN', 'error');
+        return;
+      }
+      
+      const vinRecords = records.filter(r => r.vin === vin);
+      const resultDiv = document.getElementById('adminSearchResult');
+      const editForm = document.getElementById('adminEditForm');
+      
+      if (vinRecords.length === 0) {
+        resultDiv.innerHTML = '<div class="text-gray-600">ไม่พบข้อมูล</div>';
+        editForm.classList.add('hidden');
+        return;
+      }
+      
+      const latest = vinRecords.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+      currentEditingVin = vin;
+      currentEditingRecord = latest;
+      
+      // Create photo gallery if photos exist
+      const photoGallery = latest.photos && (latest.photos[1] || latest.photos[2] || latest.photos[3]) ? `
+        <div class="mt-4">
+          <div class="font-medium text-gray-700 mb-3">📷 รูปภาพประกอบ:</div>
+          <div class="grid grid-cols-3 gap-3">
+            ${latest.photos[1] ? `
+              <div class="relative group">
+                <img src="${latest.photos[1]}" alt="หน้าปัด" class="w-full h-24 object-cover rounded-lg border cursor-pointer hover:opacity-80 transition-opacity" onclick="viewPhoto('${latest.photos[1]}', 'หน้าปัด')">
+                <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-b-lg">📷 หน้าปัด</div>
+              </div>
+            ` : '<div class="w-full h-24 bg-gray-100 rounded-lg border flex items-center justify-center text-gray-400 text-xs">ไม่มีรูป</div>'}
+            
+            ${latest.photos[2] ? `
+              <div class="relative group">
+                <img src="${latest.photos[2]}" alt="เลข VIN" class="w-full h-24 object-cover rounded-lg border cursor-pointer hover:opacity-80 transition-opacity" onclick="viewPhoto('${latest.photos[2]}', 'เลข VIN')">
+                <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-b-lg">🔎 เลข VIN</div>
+              </div>
+            ` : '<div class="w-full h-24 bg-gray-100 rounded-lg border flex items-center justify-center text-gray-400 text-xs">ไม่มีรูป</div>'}
+            
+            ${latest.photos[3] ? `
+              <div class="relative group">
+                <img src="${latest.photos[3]}" alt="Check Sheet" class="w-full h-24 object-cover rounded-lg border cursor-pointer hover:opacity-80 transition-opacity" onclick="viewPhoto('${latest.photos[3]}', 'Check Sheet')">
+                <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-b-lg">🧾 Check Sheet</div>
+              </div>
+            ` : '<div class="w-full h-24 bg-gray-100 rounded-lg border flex items-center justify-center text-gray-400 text-xs">ไม่มีรูป</div>'}
+          </div>
+        </div>
+      ` : '';
+      
+      // Show existing admin defects if any
+      const adminDefectsDisplay = latest.adminDefects && latest.adminDefects.length > 0 ? `
+        <div class="bg-orange-50 border border-orange-200 rounded-lg p-4 mt-4">
+          <div class="text-orange-700 font-medium mb-3">🔧 ความเสียหายที่บันทึกแล้ว (${latest.adminDefects.length} ตำแหน่ง):</div>
+          <div class="space-y-2">
+            ${latest.adminDefects.map((defect, index) => `
+              <div class="bg-white rounded p-3 border border-orange-100">
+                <div class="font-medium text-orange-800 mb-1">Position${index + 1}: ${defect.position || 'ไม่ระบุ'}</div>
+                <div class="text-xs text-gray-600 grid grid-cols-2 gap-2">
+                  ${defect.defectNg ? `<div>⚠️ Defect: ${defect.defectNg}</div>` : ''}
+                  ${defect.statusRepair ? `<div>🔨 Status: ${defect.statusRepair}</div>` : ''}
+                  ${defect.categoryDefect ? `<div>🏷️ Category: ${defect.categoryDefect}</div>` : ''}
+                  ${defect.incharge ? `<div>👤 Incharge: ${defect.incharge}</div>` : ''}
+                  ${defect.repairDate ? `<div>📅 Repair: ${new Date(defect.repairDate).toLocaleDateString('th-TH')}</div>` : ''}
+                  ${defect.stockStatus ? `<div>📦 Stock: ${defect.stockStatus}</div>` : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : '';
+
+      resultDiv.innerHTML = `
+        <div class="bg-white border border-gray-200 rounded-xl p-4 space-y-3 relative">
+          <div class="flex items-center justify-between">
+            <div class="font-bold text-lg text-blue-800">ผลการค้นหา</div>
+            <button onclick="toggleEditForm()" id="editToggleBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm font-medium">
+              ✏️ แก้ไขข้อมูล
+            </button>
+          </div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+            <div><strong>เลข VIN:</strong> ${latest.vin}</div>
+            <div><strong>รุ่น:</strong> ${latest.adminData?.carModel || 'รออัพเดท'}</div>
+            <div><strong>สี:</strong> ${latest.adminData?.carColor || 'รออัพเดท'}</div>
+            <div><strong>PDI Date:</strong> ${latest.adminData?.pdiDate ? new Date(latest.adminData.pdiDate).toLocaleDateString('th-TH') : 'รออัพเดท'}</div>
+            <div><strong>ผู้ตรวจ:</strong> ${latest.inspector}</div>
+            <div><strong>วันที่:</strong> ${new Date(latest.timestamp).toLocaleString('th-TH')}</div>
+          </div>
+          
+          ${latest.defects && latest.defects.length > 0 ? `
+            <div class="bg-red-50 border border-red-200 rounded-lg p-3">
+              <div class="text-red-700 font-medium mb-2">🔧 ความเสียหายจาก QC (${latest.defects.length} ตำแหน่ง):</div>
+              <div class="space-y-1">
+                ${latest.defects.map((defect, index) => `
+                  <div class="text-red-600 text-sm">• ${defect.position}: ${defect.defectDescription || 'ไม่ระบุรายละเอียด'}</div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+          
+          ${adminDefectsDisplay}
+          
+          ${photoGallery}
+          
+          <!-- NEW: Quick Status Change Buttons -->
+          <div class="pt-4 mt-4 border-t">
+              <h4 class="font-medium text-gray-700 mb-2">เปลี่ยนสถานะด่วน:</h4>
+              <div class="flex flex-wrap gap-2">
+                  <button onclick="adminUpdateStatus('${latest.id}', 'OK')" class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded-lg text-sm font-bold">
+                      ✅ OK
+                  </button>
+                  <button onclick="adminUpdateStatus('${latest.id}', 'NG')" class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded-lg text-sm font-bold">
+                      ❌ NG
+                  </button>
+                  <button onclick="adminUpdateStatus('${latest.id}', 'REPAIR')" class="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded-lg text-sm font-bold">
+                      🔧 REPAIR
+                  </button>
+              </div>
+          </div>
+          
+          <div class="pt-2 border-t text-xs text-gray-500">
+            จำนวนครั้งที่ตรวจ: ${vinRecords.length} ครั้ง | สถานะล่าสุด: ${latest.status} | PDI Status: ${latest.pdiCompleted ? '✅ เสร็จแล้ว' : '⏳ รอดำเนินการ'}
+          </div>
+        </div>
+      `;
+      
+      populateEditForm(latest);
+    }
+
+    function populateEditForm(record) {
+      // Set PDI Date to current date or record date
+      const today = new Date().toISOString().split('T')[0];
+      const recordDate = new Date(record.timestamp).toISOString().split('T')[0];
+      document.getElementById('adminPdiDate').value = recordDate;
+      
+      // Populate other fields if they exist in the record
+      if (record.adminData) {
+        document.getElementById('carModel').value = record.adminData.carModel || '';
+        document.getElementById('carColor').value = record.adminData.carColor || '';
+      }
+      
+      // Load existing defect cards if any
+      adminDefectCards = record.adminDefects || [];
+      adminDefectCardCounter = adminDefectCards.length;
+      renderAdminDefectCards();
+    }
+
+    // Admin Defect Card Management Functions
+    function addAdminDefectCard() {
+      adminDefectCardCounter++;
+      const cardId = `admin-defect-${adminDefectCardCounter}`;
+      
+      const defectCard = {
+        id: cardId,
+        position: '',
+        stockStatus: '',
+        categoryDefect: '',
+        incharge: '',
+        pdiDate: new Date().toISOString().split('T')[0],
+        defectNg: '',
+        statusRepair: '',
+        repairDate: new Date().toISOString().split('T')[0]
+      };
+      
+      adminDefectCards.push(defectCard);
+      renderAdminDefectCards();
+      
+      // Hide no defect message
+      document.getElementById('adminNoDefectMessage').classList.add('hidden');
+      
+      showToast(`✅ เพิ่ม Position ${adminDefectCardCounter} แล้ว`, 'success');
+    }
+
+    function removeAdminDefectCard(cardId) {
+      adminDefectCards = adminDefectCards.filter(card => card.id !== cardId);
+      renderAdminDefectCards();
+      
+      // Show no defect message if no cards left
+      if (adminDefectCards.length === 0) {
+        document.getElementById('adminNoDefectMessage').classList.remove('hidden');
+      }
+      
+      showToast('🗑️ ลบตำแหน่งความเสียหายแล้ว', 'success');
+    }
+
+    function updateAdminDefectCard(cardId, field, value) {
+      const card = adminDefectCards.find(c => c.id === cardId);
+      if (card) {
+        card[field] = value;
+      }
+    }
+
+    function renderAdminDefectCards() {
+      const container = document.getElementById('adminDefectCardsContainer');
+      
+      if (adminDefectCards.length === 0) {
+        document.getElementById('adminNoDefectMessage').classList.remove('hidden');
+        container.innerHTML = '';
+        return;
+      }
+      
+      document.getElementById('adminNoDefectMessage').classList.add('hidden');
+      
+      // Define card colors
+      const cardColors = [
+        'border-red-200 bg-red-50',
+        'border-blue-200 bg-blue-50', 
+        'border-green-200 bg-green-50',
+        'border-yellow-200 bg-yellow-50',
+        'border-purple-200 bg-purple-50',
+        'border-pink-200 bg-pink-50',
+        'border-indigo-200 bg-indigo-50',
+        'border-orange-200 bg-orange-50'
+      ];
+      
+      container.innerHTML = adminDefectCards.map((card, index) => {
+        const colorClass = cardColors[index % cardColors.length];
+        const positionNumber = index + 1;
+        
+        return `
+          <div class="border-2 ${colorClass} rounded-xl p-6 relative">
+            <div class="flex items-center justify-between mb-4">
+              <h4 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                🔧 Position${positionNumber}
+              </h4>
+              <button onclick="removeAdminDefectCard('${card.id}')" class="text-red-500 hover:text-red-700 bg-red-100 hover:bg-red-200 w-8 h-8 rounded-full flex items-center justify-center transition-colors">
+                ✕
+              </button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <!-- Stock Status -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Stock Status</label>
+                <input type="text" list="stockStatusList" value="${card.stockStatus}" onchange="updateAdminDefectCard('${card.id}', 'stockStatus', this.value)" placeholder="เลือกหรือพิมพ์" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <datalist id="stockStatusList">
+                  <option value="EX-warehouse">
+                </datalist>
+              </div>
+              
+              <!-- Category Defect -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Category Defect</label>
+                <input type="text" list="categoryDefectList" value="${card.categoryDefect}" onchange="updateAdminDefectCard('${card.id}', 'categoryDefect', this.value)" placeholder="เลือกหรือพิมพ์" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <datalist id="categoryDefectList">
+                  <option value="Appearance">
+                  <option value="Appearance/Part replace">
+                  <option value="Appearance/Re Dent">
+                  <option value="Appearance/Repaint">
+                  <option value="Appearance/Repolishing">
+                  <option value="BYD Transport">
+                  <option value="BYD paint.">
+                  <option value="Part missing /waiting order">
+                  <option value="Technical issue">
+                </datalist>
+              </div>
+              
+              <!-- Incharge -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Incharge</label>
+                <input type="text" list="inchargeList" value="${card.incharge}" onchange="updateAdminDefectCard('${card.id}', 'incharge', this.value)" placeholder="เลือกหรือพิมพ์" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <datalist id="inchargeList">
+                  <option value="BYD Assembly.">
+                  <option value="BYD paint.">
+                  <option value="BYD part.">
+                  <option value="BYD Transport">
+                  <option value="JWD Transport">
+                  <option value="N/A">
+                </datalist>
+              </div>
+              
+              <!-- PDI Date -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">PDI Date (at BYD)</label>
+                <input type="date" value="${card.pdiDate}" onchange="updateAdminDefectCard('${card.id}', 'pdiDate', this.value)" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+              </div>
+              
+              <!-- Position -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Position</label>
+                <input type="text" list="positionList" value="${card.position}" onchange="updateAdminDefectCard('${card.id}', 'position', this.value)" placeholder="เลือกหรือพิมพ์" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <datalist id="positionList">
+                  <option value="AEB system warning hold on.">
+                  <option value="battery">
+                  <option value="Brake light">
+                  <option value="Car cabin">
+                  <option value="Engines">
+                  <option value="Front car carpet LH">
+                  <option value="Front Seat RH">
+                  <option value="Mileage">
+                  <option value="Monitor">
+                  <option value="PROTECTIVE TRIM COVER, WHEEL NUT LH">
+                  <option value="Rear door guard LH">
+                  <option value="Tailgate">
+                  <option value="Tailgate Wiper">
+                  <option value="TPMS">
+                  <option value="Transport mode">
+                  <option value="VIN Number Code">
+                  <option value="VMT">
+                  <option value="แผ่นปิดประตู RH">
+                </datalist>
+              </div>
+              
+              <!-- Defect/NG -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Defect/NG</label>
+                <input type="text" list="defectNgList" value="${card.defectNg}" onchange="updateAdminDefectCard('${card.id}', 'defectNg', this.value)" placeholder="เลือกหรือพิมพ์" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <datalist id="defectNgList">
+                  <option value="Seed Color">
+                  <option value="Scratched">
+                  <option value="Missing Part">
+                  <option value="Drip Paint">
+                  <option value="The battery does not reach the specified threshold">
+                  <option value="Incorrect">
+                  <option value="Discolored">
+                  <option value="Crack Paint">
+                  <option value="Uneven Color">
+                  <option value="Paint Pin Hole">
+                  <option value="Dent">
+                  <option value="Abnormal">
+                  <option value="Washing Not clean">
+                  <option value="Rust">
+                  <option value="Crack">
+                  <option value="Paint Mist">
+                  <option value="Glue Stain">
+                  <option value="Broken">
+                  <option value="Paint Wave">
+                  <option value="Polishing Stain">
+                  <option value="Anti Rust Stain">
+                  <option value="Dirty">
+                  <option value="Rain Stain">
+                  <option value="Paint Scar">
+                  <option value="Tear">
+                  <option value="Paint Blistering">
+                  <option value="Blistering">
+                  <option value="Chemical Pen Mark">
+                  <option value="Incomplete Assembly">
+                  <option value="Gap out of STD.">
+                  <option value="AEB system warning hold on.">
+                  <option value="Distorted">
+                  <option value="Over Mileage">
+                  <option value="Spot Paint">
+                  <option value="Tire pressure below standard">
+                  <option value="Oil Stain">
+                  <option value="Bubble">
+                  <option value="Wrinkled Paint">
+                  <option value="Paint Stain">
+                  <option value="Missing Part (Cover bag)">
+                  <option value="Shake">
+                  <option value="Sanding mark">
+                  <option value="Blister Paint">
+                  <option value="Different color shade">
+                  <option value="Freshly washed">
+                  <option value="Yellow Stain">
+                  <option value="Sticker Bubble">
+                  <option value="Squeeze">
+                  <option value="Abnormal noise">
+                  <option value="Under-Clear Dirt">
+                  <option value="Swag color">
+                  <option value="Embossed Color">
+                  <option value="Incomplete Paint Coverage">
+                  <option value="Debris">
+                  <option value="Hole plug Missing Part">
+                  <option value="Broken Sealer">
+                  <option value="Blistering Sealer">
+                  <option value="Asphalt stains">
+                  <option value="Sealer Particle">
+                  <option value="Crap">
+                  <option value="Liquid Stains">
+                  <option value="Grease Remain">
+                  <option value="Grains Or Black Spots">
+                  <option value="Voltage Lower than STD.">
+                  <option value="Bulge">
+                  <option value="TPMS Not working">
+                  <option value="Water comes in">
+                  <option value="Burn marks">
+                  <option value="Lower Standard">
+                  <option value="CCA lower than STD.">
+                  <option value="Wet">
+                  <option value="Scratch under the clear layer">
+                  <option value="Orange Peel">
+                  <option value="Molding Trace">
+                  <option value="Paint Crack">
+                  <option value="Step">
+                  <option value="Flake">
+                  <option value="Wrap film protection">
+                  <option value="Cut">
+                  <option value="Fin">
+                  <option value="Metallic Particle">
+                  <option value="Scratched under the clear layer">
+                  <option value="Sealer Wrinkled">
+                  <option value="Rust under the clear layer">
+                  <option value="Paint wave under the clear layer">
+                  <option value="Sealer Trace">
+                  <option value="Bad Smell">
+                  <option value="Rat bite">
+                  <option value="Nail under the wheel">
+                  <option value="Bubble under the clear layer">
+                  <option value="Paint stain under the clear layer">
+                  <option value="Wrinkled Paint under the clear layer">
+                  <option value="Over flow">
+                  <option value="Deep Scratch">
+                  <option value="Tilted">
+                  <option value="Thin Paint">
+                  <option value="Paint Drip">
+                  <option value="Distorted Sealer">
+                  <option value="Dirt Inside">
+                  <option value="No marked on the nut heads">
+                  <option value="Wrinkled Sealer">
+                  <option value="Slip">
+                  <option value="Burn Mark">
+                  <option value="Not Have">
+                  <option value="No holes for screws">
+                  <option value="Paint Dirp">
+                  <option value="The battery does not reach the specified threshold. (lower 45%)">
+                  <option value="Matte Finish">
+                  <option value="Dirty">
+                  <option value="Over Mileage (>30 km)">
+                  <option value="Crcak">
+                  <option value="Failed">
+                  <option value="ไม่มี ม.อ.ก">
+                  <option value="Bulge">
+                  <option value="Paint Crack">
+                  <option value="Polishing Stains">
+                  <option value="Crack">
+                  <option value="soft pneumatic">
+                  <option value="All Car">
+                </datalist>
+              </div>
+              
+              <!-- Status Repair -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Status Repair</label>
+                <input type="text" list="statusRepairList" value="${card.statusRepair}" onchange="updateAdminDefectCard('${card.id}', 'statusRepair', this.value)" placeholder="เลือกหรือพิมพ์" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+                <datalist id="statusRepairList">
+                  <option value="Note NG then both confirmed OK">
+                  <option value="Note NG and repaired">
+                  <option value="Waiting Repair">
+                  <option value="Note NG then BYD ACC">
+                  <option value="Noted NG and Wating part.">
+                </datalist>
+              </div>
+              
+              <!-- Repair Date -->
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Repair Date</label>
+                <input type="date" value="${card.repairDate}" onchange="updateAdminDefectCard('${card.id}', 'repairDate', this.value)" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500">
+              </div>
+            </div>
+            
+            <!-- Status Summary -->
+            <div class="mt-4 p-3 bg-white bg-opacity-50 rounded-lg border">
+              <div class="text-sm text-gray-700">
+                <strong>สรุป Position${positionNumber}:</strong> 
+                ${card.position ? `📍 ${card.position}` : '📍 -'} | 
+                ${card.defectNg ? `⚠️ ${card.defectNg}` : '⚠️ -'} | 
+                ${card.statusRepair ? `🔨 ${card.statusRepair}` : '🔨 -'}
+                ${card.repairDate ? ` | 📅 ${new Date(card.repairDate).toLocaleDateString('th-TH')}` : ''}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+
+
+    function saveAdminChanges() {
+      if (!currentEditingVin || !currentEditingRecord) {
+        showToast('ไม่พบข้อมูลที่จะแก้ไข', 'error');
+        return;
+      }
+      
+      // Show loading state
+      const saveBtn = event.target;
+      const originalText = saveBtn.innerHTML;
+      saveBtn.innerHTML = '⚡ บันทึก...';
+      saveBtn.disabled = true;
+      
+      // Collect data from form
+      const adminData = {
+        carModel: document.getElementById('carModel').value,
+        carColor: document.getElementById('carColor').value,
+        pdiDate: document.getElementById('adminPdiDate').value
+      };
+      
+      // Update local data immediately for instant UI response
+      const recordIndex = records.findIndex(r => r.id === currentEditingRecord.id);
+      if (recordIndex !== -1) {
+        records[recordIndex].adminData = adminData;
+        records[recordIndex].adminDefects = [...adminDefectCards]; // Save defect cards
+        records[recordIndex].lastModified = new Date().toISOString();
+        records[recordIndex].modifiedBy = 'ผู้ดูแลระบบ';
+        records[recordIndex].pdiCompleted = true; // Mark as PDI completed
+        
+        // Show success immediately
+        saveBtn.innerHTML = '✅ สำเร็จ!';
+        saveBtn.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium';
+        showToast(`⚡ บันทึกสำเร็จ! รถย้ายไปฝั่งตรวจสอบแล้ว ${adminDefectCards.length > 0 ? `(${adminDefectCards.length} ตำแหน่งความเสียหาย)` : ''}`, 'success');
+        
+        // Update PDI Operation if it's currently active
+        const activeTab = document.querySelector('.tab-btn.active-tab');
+        if (activeTab && activeTab.id === 'tab-pdi') {
+          refreshPdi();
+        }
+        
+        // Update admin records if it's currently active
+        if (activeTab && activeTab.id === 'tab-admin') {
+          refreshAdminRecords();
+        }
+        
+        // Reset button after short delay
+        setTimeout(() => {
+          saveBtn.innerHTML = originalText;
+          saveBtn.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium';
+          saveBtn.disabled = false;
+          
+          // Reset the admin search area after save and delay
+          document.getElementById('adminVin').value = '';
+          document.getElementById('adminSearchResult').innerHTML = '';
+          document.getElementById('adminEditForm').classList.add('hidden');
+
+        }, 1500);
+        
+        // Save to Firebase in background (non-blocking)
+        const updatedRecord = records[recordIndex];
+        database.ref('pdi_records').orderByChild('id').equalTo(updatedRecord.id).once('value')
+          .then((snapshot) => {
+            if (snapshot.exists()) {
+              const promises = [];
+              snapshot.forEach((childSnapshot) => {
+                promises.push(childSnapshot.ref.update({
+                  adminData: adminData,
+                  adminDefects: updatedRecord.adminDefects,
+                  lastModified: updatedRecord.lastModified,
+                  modifiedBy: updatedRecord.modifiedBy,
+                  pdiCompleted: updatedRecord.pdiCompleted
+                }));
+              });
+              return Promise.all(promises);
+            } else {
+              return database.ref('pdi_records').push(updatedRecord);
+            }
+          })
+          .catch((error) => {
+            console.error('Background save error:', error);
+            // Don't show error to user since UI already updated
+          });
+      } else {
+        saveBtn.innerHTML = originalText;
+        saveBtn.disabled = false;
+        showToast('ไม่พบข้อมูลในระบบ', 'error');
+      }
+    }
+
+
+    function exportData() {
+      if (records.length === 0) {
+        showToast('ไม่มีข้อมูลให้ส่งออก', 'error');
+        return;
+      }
+      
+      // Create CSV content
+      const headers = ['VIN', 'Status', 'Inspector', 'Timestamp'];
+      const csvContent = [
+        headers.join(','),
+        ...records.map(record => [
+          record.vin,
+          record.status,
+          record.inspector,
+          record.timestamp
+        ].join(','))
+      ].join('\n');
+      
+      // Download CSV
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `pdi_records_${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      showToast('📥 ส่งออกข้อมูลสำเร็จ!');
+    }
+
+    function exportToExcel() {
+        const selectedDate = document.getElementById('dashDate').value;
+        let filteredRecords = records;
+
+        if (selectedDate) {
+            filteredRecords = records.filter(record => {
+                const recordDate = new Date(record.timestamp).toISOString().split('T')[0];
+                return recordDate === selectedDate;
+            });
+        }
+
+        if (filteredRecords.length === 0) {
+            showToast('ไม่มีข้อมูลให้ส่งออก', 'error');
+            return;
+        }
+
+        // Get latest record per VIN for the final list
+        const latestByVin = {};
+        filteredRecords.forEach(record => {
+            if (!latestByVin[record.vin] || new Date(record.timestamp) > new Date(latestByVin[record.vin].timestamp)) {
+                latestByVin[record.vin] = record;
+            }
+        });
+        const latestRecords = Object.values(latestByVin);
+
+        const getWorkPeriod = (timestamp) => {
+            const date = new Date(timestamp);
+            const hour = date.getHours() + date.getMinutes() / 60;
+            if (hour >= 9 && hour < 10.5) return 'P1 (09:00-10:30)';
+            if (hour >= 10.67 && hour < 12.5) return 'P2 (10:40-12:30)';
+            if (hour >= 13.5 && hour < 15.5) return 'P3 (13:30-15:30)';
+            if (hour >= 15.67 && hour < 18) return 'P4 (15:40-18:00)';
+            if (hour >= 18.5 && hour < 20.5) return 'P5 (18:30-20:30)';
+            return 'นอกเวลา';
+        };
+
+        const headers = [
+            'วันที่',
+            'ลำดับ',
+            'VIN (Vehicle Identification Number)',
+            'Model',
+            'Status',
+            'จำนวนการตรวจสอบ', // Changed Header
+            'ช่วงเวลา',
+            'หมายเหตุ'
+        ];
+
+        const sortedRecords = latestRecords.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+        const excelData = sortedRecords.map((record, index) => {
+            // Get the total inspection count for this VIN from the complete records list
+            const inspectionCount = records.filter(r => r.vin === record.vin).length;
+            return [
+                new Date(record.timestamp).toLocaleDateString('th-TH'),
+                index + 1,
+                record.vin,
+                record.adminData?.carModel || 'รออัพเดท',
+                record.status,
+                inspectionCount, // Changed Data
+                getWorkPeriod(record.timestamp),
+                record.defects && record.defects.length > 0 ? `มีความเสียหาย ${record.defects.length} ตำแหน่ง` : 'ไม่มีความเสียหาย'
+            ];
+        });
+
+        const csvContent = [
+            '\uFEFF' + headers.join(','),
+            ...excelData.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        const dateStr = selectedDate || new Date().toISOString().split('T')[0];
+        link.setAttribute('download', `PDI_Dashboard_${dateStr}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast(`📊 ส่งออก Excel สำเร็จ! (${excelData.length} รายการ)`, 'success');
+    }
+
+
+    async function shareToLine() {
+        try {
+            showToast('📸 กำลังสร้างรูปภาพ...', 'success');
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            const selectedDate = document.getElementById('dashDate').value || new Date().toISOString().split('T')[0];
+            let filteredRecords = records.filter(record => {
+                const recordDate = new Date(record.timestamp).toISOString().split('T')[0];
+                return recordDate === selectedDate;
+            });
+
+            const latestByVin = {};
+            filteredRecords.forEach(record => {
+                if (!latestByVin[record.vin] || new Date(record.timestamp) > new Date(latestByVin[record.vin].timestamp)) {
+                    latestByVin[record.vin] = record;
+                }
+            });
+            const latestRecords = Object.values(latestByVin);
+            const okCount = latestRecords.filter(r => r.status === 'OK').length;
+            const ngCount = latestRecords.filter(r => r.status === 'NG').length;
+            const repairCount = latestRecords.filter(r => r.status === 'REPAIR').length;
+            const totalCount = latestRecords.length;
+
+            // --- Data Calculation for Table ---
+            const periods = [ { name: 'P1', start: 9, end: 10.5 }, { name: 'P2', start: 10.67, end: 12.5 }, { name: 'P3', start: 13.5, end: 15.5 }, { name: 'P4', start: 15.67, end: 18 }, { name: 'P5', start: 18.5, end: 20.5 }];
+            const carModels = ['DOLPHIN', 'SEAL5 DM-I', 'SEALION 6 DM-I', 'ATTO3', 'รออัพเดท'];
+            const okngData = {}, repairData = {}, totalData = {};
+            carModels.forEach(model => {
+                okngData[model] = { P1: 0, P2: 0, P3: 0, P4: 0, P5: 0, total: 0 };
+                repairData[model] = { P1: 0, P2: 0, P3: 0, P4: 0, P5: 0, total: 0 };
+                totalData[model] = { P1: 0, P2: 0, P3: 0, P4: 0, P5: 0, total: 0 };
+            });
+            filteredRecords.forEach(record => {
+                const recordTime = new Date(record.timestamp);
+                const hour = recordTime.getHours() + recordTime.getMinutes() / 60;
+                const carModel = record.adminData?.carModel || 'รออัพเดท';
+                let period = null;
+                periods.forEach(p => { if (hour >= p.start && hour < p.end) period = p.name; });
+                if (period && carModels.includes(carModel)) {
+                    if (record.status === 'OK' || record.status === 'NG') { okngData[carModel][period]++; okngData[carModel].total++; }
+                    if (record.status === 'REPAIR') { repairData[carModel][period]++; repairData[carModel].total++; }
+                    totalData[carModel][period]++; totalData[carModel].total++;
+                }
+            });
+            
+            const activeModels = carModels.filter(model => totalData[model].total > 0);
+            const tableRowCount = activeModels.length + 1; // +1 for total row
+            
+            // Dynamic Canvas Height Calculation
+            const headerHeight = 80;
+            const dateHeight = 40;
+            const cardSectionHeight = 160; // Includes cards and padding
+            const tableTitleHeight = 60;
+            const tableHeaderHeight = 80;
+            const rowHeight = 40;
+            const footerHeight = 50;
+            
+            canvas.width = 1200;
+            canvas.height = headerHeight + dateHeight + cardSectionHeight + tableTitleHeight + tableHeaderHeight + (tableRowCount * rowHeight) + footerHeight;
+
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Header
+            ctx.fillStyle = '#1e40af';
+            ctx.fillRect(0, 0, canvas.width, headerHeight);
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 32px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('📊 2PS PDI Dashboard', canvas.width / 2, 50);
+
+            // Draw Date
+            ctx.fillStyle = '#64748b';
+            ctx.font = '20px Arial';
+            ctx.fillText(`วันที่: ${new Date(selectedDate).toLocaleDateString('th-TH')}`, canvas.width / 2, headerHeight + dateHeight - 10);
+
+            // Draw Stats Cards
+            const cardWidth = 250;
+            const cardHeight = 120;
+            const cardSpacing = 50;
+            const startX = (canvas.width - (4 * cardWidth + 3 * cardSpacing)) / 2;
+            const cardY = headerHeight + dateHeight;
+
+            ctx.fillStyle = '#e0f2fe'; ctx.fillRect(startX, cardY, cardWidth, cardHeight);
+            ctx.strokeStyle = '#0284c7'; ctx.lineWidth = 2; ctx.strokeRect(startX, cardY, cardWidth, cardHeight);
+            ctx.fillStyle = '#0284c7'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'center';
+            ctx.fillText('📊 ทั้งหมด', startX + cardWidth / 2, cardY + 40);
+            ctx.font = 'bold 36px Arial'; ctx.fillText(totalCount.toString(), startX + cardWidth / 2, cardY + 85);
+
+            const okX = startX + cardWidth + cardSpacing;
+            ctx.fillStyle = '#dcfce7'; ctx.fillRect(okX, cardY, cardWidth, cardHeight);
+            ctx.strokeStyle = '#16a34a'; ctx.strokeRect(okX, cardY, cardWidth, cardHeight);
+            ctx.fillStyle = '#16a34a'; ctx.font = 'bold 24px Arial';
+            ctx.fillText('✅ OK', okX + cardWidth / 2, cardY + 40);
+            ctx.font = 'bold 36px Arial'; ctx.fillText(okCount.toString(), okX + cardWidth / 2, cardY + 85);
+
+            const ngX = okX + cardWidth + cardSpacing;
+            ctx.fillStyle = '#fee2e2'; ctx.fillRect(ngX, cardY, cardWidth, cardHeight);
+            ctx.strokeStyle = '#dc2626'; ctx.strokeRect(ngX, cardY, cardWidth, cardHeight);
+            ctx.fillStyle = '#dc2626'; ctx.font = 'bold 24px Arial';
+            ctx.fillText('❌ NG', ngX + cardWidth / 2, cardY + 40);
+            ctx.font = 'bold 36px Arial'; ctx.fillText(ngCount.toString(), ngX + cardWidth / 2, cardY + 85);
+
+            const repairX = ngX + cardWidth + cardSpacing;
+            ctx.fillStyle = '#fef3c7'; ctx.fillRect(repairX, cardY, cardWidth, cardHeight);
+            ctx.strokeStyle = '#d97706'; ctx.strokeRect(repairX, cardY, cardWidth, cardHeight);
+            ctx.fillStyle = '#d97706'; ctx.font = 'bold 24px Arial';
+            ctx.fillText('🔧 REPAIR', repairX + cardWidth / 2, cardY + 40);
+            ctx.font = 'bold 36px Arial'; ctx.fillText(repairCount.toString(), repairX + cardWidth / 2, cardY + 85);
+            
+            // --- DRAW PERIOD ANALYSIS TABLE ---
+            let tableY = cardY + cardHeight + 40;
+            ctx.fillStyle = '#1e293b'; ctx.font = 'bold 24px Arial'; ctx.textAlign = 'center';
+            ctx.fillText('สรุปการทำงานตามช่วงเวลา (P1-P5)', canvas.width / 2, tableY);
+            tableY += 40;
+
+            const tableStartX = 50;
+            const tableWidth = canvas.width - 100;
+            const modelColWidth = 180;
+            const periodColWidth = 50;
+            const totalColWidth = 60;
+            
+            // Draw Table Headers
+            ctx.font = 'bold 14px Arial';
+            let currentX = tableStartX;
+            ctx.fillStyle = '#f1f5f9'; ctx.fillRect(currentX, tableY, tableWidth, tableHeaderHeight);
+            ctx.fillStyle = '#1e293b'; ctx.textAlign = 'center';
+            ctx.fillText('รุ่นรถ', currentX + modelColWidth / 2, tableY + tableHeaderHeight / 2);
+            currentX += modelColWidth;
+
+            const drawHeaderGroup = (text, color, width) => {
+                ctx.fillStyle = color; ctx.fillText(text, currentX + width / 2, tableY + rowHeight / 2);
+                ['P1', 'P2', 'P3', 'P4', 'P5', 'รวม'].forEach((p, i) => {
+                    const colW = p === 'รวม' ? totalColWidth : periodColWidth;
+                    ctx.fillText(p, currentX + (i * periodColWidth) + colW / 2, tableY + rowHeight * 1.5);
+                });
+                currentX += width;
+            };
+
+            drawHeaderGroup('✅ OK+NG', '#16a34a', (periodColWidth * 5) + totalColWidth);
+            drawHeaderGroup('🔧 REPAIR', '#d97706', (periodColWidth * 5) + totalColWidth);
+            drawHeaderGroup('📊 TOTAL', '#0284c7', (periodColWidth * 5) + totalColWidth);
+
+            ctx.strokeStyle = '#e2e8f0'; ctx.lineWidth = 1;
+            ctx.strokeRect(tableStartX, tableY, tableWidth, tableHeaderHeight);
+            tableY += tableHeaderHeight;
+
+            // Draw Table Rows
+            ctx.font = '16px Arial';
+            activeModels.forEach((model, rowIndex) => {
+                currentX = tableStartX;
+                ctx.fillStyle = rowIndex % 2 === 0 ? '#ffffff' : '#f8fafc';
+                ctx.fillRect(currentX, tableY, tableWidth, rowHeight);
+                ctx.fillStyle = '#1e293b'; ctx.textAlign = 'left';
+                ctx.fillText(model, currentX + 10, tableY + rowHeight / 2 + 5);
+                currentX += modelColWidth;
+
+                ctx.textAlign = 'center';
+                const drawRowData = (data) => {
+                    ['P1', 'P2', 'P3', 'P4', 'P5'].forEach((p, i) => {
+                        ctx.fillText(data[p], currentX + (i * periodColWidth) + periodColWidth / 2, tableY + rowHeight / 2 + 5);
+                    });
+                    currentX += periodColWidth * 5;
+                    ctx.fillText(data.total, currentX + totalColWidth / 2, tableY + rowHeight / 2 + 5);
+                    currentX += totalColWidth;
+                };
+                drawRowData(okngData[model]);
+                drawRowData(repairData[model]);
+                drawRowData(totalData[model]);
+
+                ctx.strokeRect(tableStartX, tableY, tableWidth, rowHeight);
+                tableY += rowHeight;
+            });
+            
+            // Draw Total Row
+            const periodTotals = { P1: 0, P2: 0, P3: 0, P4: 0, P5: 0, total: 0 };
+            const repairPeriodTotals = { P1: 0, P2: 0, P3: 0, P4: 0, P5: 0, total: 0 };
+            const totalPeriodTotals = { P1: 0, P2: 0, P3: 0, P4: 0, P5: 0, total: 0 };
+            activeModels.forEach(model => {
+                ['P1', 'P2', 'P3', 'P4', 'P5', 'total'].forEach(period => {
+                    periodTotals[period] += okngData[model][period];
+                    repairPeriodTotals[period] += repairData[model][period];
+                    totalPeriodTotals[period] += totalData[model][period];
+                });
+            });
+            ctx.fillStyle = '#e2e8f0'; ctx.fillRect(tableStartX, tableY, tableWidth, rowHeight);
+            ctx.fillStyle = '#1e293b'; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'left';
+            ctx.fillText('รวมทั้งหมด', tableStartX + 10, tableY + rowHeight / 2 + 5);
+            currentX = tableStartX + modelColWidth;
+            ctx.textAlign = 'center';
+            const drawTotalRowData = (data) => {
+                ['P1', 'P2', 'P3', 'P4', 'P5'].forEach((p, i) => {
+                    ctx.fillText(data[p], currentX + (i * periodColWidth) + periodColWidth / 2, tableY + rowHeight / 2 + 5);
+                });
+                currentX += periodColWidth * 5;
+                ctx.fillText(data.total, currentX + totalColWidth / 2, tableY + rowHeight / 2 + 5);
+                currentX += totalColWidth;
+            };
+            drawTotalRowData(periodTotals);
+            drawTotalRowData(repairPeriodTotals);
+            drawTotalRowData(totalPeriodTotals);
+            ctx.strokeRect(tableStartX, tableY, tableWidth, rowHeight);
+
+
+            // Footer
+            ctx.fillStyle = '#64748b'; ctx.font = '14px Arial'; ctx.textAlign = 'center';
+            ctx.fillText(`สร้างโดย 2PS PDI System | ${new Date().toLocaleString('th-TH')}`, canvas.width / 2, canvas.height - 20);
+
+            canvas.toBlob(async (blob) => {
+                try {
+                    const url = URL.createObjectURL(blob);
+                    const modal = document.createElement('div');
+                    modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4';
+                    modal.innerHTML = `
+                      <div class="bg-white rounded-xl max-w-md w-full">
+                        <div class="p-6 text-center">
+                          <h3 class="text-xl font-bold text-gray-900 mb-4">📱 ส่งไปยัง LINE</h3>
+                          <div class="mb-6"><img src="${url}" alt="Dashboard Preview" class="w-full rounded-lg border shadow-sm"></div>
+                          <div class="space-y-3">
+                            <button onclick="downloadImage('${url}', 'PDI_Dashboard_${selectedDate}.png')" class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg font-medium">📥 ดาวน์โหลดรูปภาพ</button>
+                            <button onclick="copyImageToClipboard('${url}')" class="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-medium">📋 คัดลอกรูปภาพ</button>
+                            <button onclick="shareViaWebShare('${url}', 'PDI Dashboard ${selectedDate}')" class="w-full bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-lg font-medium">📤 แชร์ผ่านแอป</button>
+                          </div>
+                        </div>
+                        <div class="p-4 border-t bg-gray-50 text-center">
+                          <button onclick="this.closest('.fixed').remove()" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg">ปิด</button>
+                        </div>
+                      </div>`;
+                    document.body.appendChild(modal);
+                    showToast('📸 สร้างรูปภาพสำเร็จ! เลือกวิธีการส่ง', 'success');
+                } catch (error) {
+                    console.error('Error creating image:', error);
+                    showToast('เกิดข้อผิดพลาดในการสร้างรูปภาพ', 'error');
+                }
+            }, 'image/png', 0.95);
+
+        } catch (error) {
+            console.error('Error in shareToLine:', error);
+            showToast('เกิดข้อผิดพลาดในการสร้างรูปภาพ', 'error');
+        }
+    }
+
+
+    function downloadImage(url, filename) {
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      link.click();
+      showToast('📥 ดาวน์โหลดรูปภาพสำเร็จ!', 'success');
+    }
+
+    async function copyImageToClipboard(url) {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        
+        if (navigator.clipboard && navigator.clipboard.write) {
+          await navigator.clipboard.write([
+            new ClipboardItem({ 'image/png': blob })
+          ]);
+          showToast('📋 คัดลอกรูปภาพสำเร็จ! วางใน LINE ได้เลย', 'success');
+        } else {
+          showToast('เบราว์เซอร์ไม่รองรับการคัดลอกรูปภาพ', 'error');
+        }
+      } catch (error) {
+        console.error('Error copying image:', error);
+        showToast('ไม่สามารถคัดลอกรูปภาพได้', 'error');
+      }
+    }
+
+    async function shareViaWebShare(url, title) {
+      try {
+        if (navigator.share) {
+          const response = await fetch(url);
+          const blob = await response.blob();
+          const file = new File([blob], 'dashboard.png', { type: 'image/png' });
+          
+          await navigator.share({
+            title: title,
+            text: 'PDI Dashboard Report',
+            files: [file]
+          });
+          showToast('📤 แชร์สำเร็จ!', 'success');
+        } else {
+          showToast('เบราว์เซอร์ไม่รองรับการแชร์', 'error');
+        }
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          console.error('Error sharing:', error);
+          showToast('ไม่สามารถแชร์ได้', 'error');
+        }
+      }
+    }
+
+    function toggleEditForm() {
+      const editForm = document.getElementById('adminEditForm');
+      const toggleBtn = document.getElementById('editToggleBtn');
+      
+      if (editForm.classList.contains('hidden')) {
+        editForm.classList.remove('hidden');
+        toggleBtn.innerHTML = '❌ ปิดแก้ไข';
+        toggleBtn.className = 'bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-lg text-sm font-medium';
+        showToast('📝 เปิดฟอร์มแก้ไขแล้ว', 'success');
+      } else {
+        editForm.classList.add('hidden');
+        toggleBtn.innerHTML = '✏️ แก้ไขข้อมูล';
+        toggleBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded-lg text-sm font-medium';
+        
+        // Reset defect cards when closing
+        adminDefectCards = [];
+        adminDefectCardCounter = 0;
+        renderAdminDefectCards();
+        
+        showToast('📝 ปิดฟอร์มแก้ไขแล้ว', 'success');
+      }
+    }
+
+    function refreshAdminRecords() {
+      const selectedDate = document.getElementById('adminRecordsDate').value;
+      let filteredRecords = records;
+      
+      if (selectedDate) {
+        filteredRecords = records.filter(record => {
+          const recordDate = new Date(record.timestamp).toISOString().split('T')[0];
+          return recordDate === selectedDate;
+        });
+      }
+      
+      // Get latest record per VIN
+      const latestByVin = {};
+      filteredRecords.forEach(record => {
+        if (!latestByVin[record.vin] || new Date(record.timestamp) > new Date(latestByVin[record.vin].timestamp)) {
+          latestByVin[record.vin] = record;
+        }
+      });
+      
+      const latestRecords = Object.values(latestByVin);
+      
+      // Update stats
+      const totalCount = latestRecords.length;
+      const okCount = latestRecords.filter(r => r.status === 'OK').length;
+      const ngCount = latestRecords.filter(r => r.status === 'NG').length;
+      const repairCount = latestRecords.filter(r => r.status === 'REPAIR').length;
+      
+      document.getElementById('adminTotalCount').textContent = totalCount;
+      document.getElementById('adminOkCount').textContent = okCount;
+      document.getElementById('adminNgCount').textContent = ngCount;
+      document.getElementById('adminRepairCount').textContent = repairCount;
+      
+      // Update table
+      const tbody = document.getElementById('adminRecordsTable');
+      if (latestRecords.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="py-8 text-center text-gray-500">ไม่มีข้อมูลในวันที่เลือก</td></tr>';
+        return;
+      }
+      
+      tbody.innerHTML = latestRecords
+        .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+        .map(record => {
+          const statusColor = record.status === 'OK' ? 'text-green-700 bg-green-50' : 
+                                record.status === 'NG' ? 'text-red-700 bg-red-50' : 
+                                record.status === 'REPAIR' ? 'text-yellow-700 bg-yellow-50' : 'text-gray-700';
+          
+          const pdiStatus = record.pdiCompleted ? 
+            '<span class="px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-700">✅ เสร็จแล้ว</span>' :
+            '<span class="px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-700">⏳ รอดำเนินการ</span>';
+          
+          return `
+            <tr class="border-b hover:bg-gray-50">
+              <td class="py-3 px-4">
+                <div class="flex items-center gap-2">
+                  <span class="font-medium">${record.vin}</span>
+                  <button onclick="copyVin('${record.vin}', this)" class="copy-btn bg-blue-100 hover:bg-blue-200 text-blue-700 px-1 py-0.5 rounded text-xs font-medium transition-all duration-200">
+                    📋
+                  </button>
+                </div>
+              </td>
+              <td class="py-3 px-4">${record.adminData?.carModel || 'รออัพเดท'}</td>
+              <td class="py-3 px-4">${record.adminData?.carColor || 'รออัพเดท'}</td>
+              <td class="py-3 px-4">
+                <span class="px-2 py-1 rounded text-xs font-medium ${statusColor}">${record.status}</span>
+              </td>
+              <td class="py-3 px-4">${record.inspector}</td>
+              <td class="py-3 px-4">
+                <div class="text-sm">${new Date(record.timestamp).toLocaleString('th-TH')}</div>
+                ${record.lastModified ? `<div class="text-xs text-green-600">แก้ไข: ${new Date(record.lastModified).toLocaleString('th-TH')}</div>` : ''}
+              </td>
+              <td class="py-3 px-4">${pdiStatus}</td>
+              <td class="py-3 px-4">
+                <div class="flex flex-wrap gap-1">
+                  <button onclick="quickEditRecord('${record.vin}')" class="bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded text-xs font-medium">
+                    ✏️ แก้ไข
+                  </button>
+                  <button onclick="viewRecordDetails('${record.vin}')" class="bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded text-xs font-medium">
+                    👁️ ดู
+                  </button>
+                  <!-- NEW: Admin Status Change Buttons -->
+                  <button onclick="adminUpdateStatus('${record.id}', 'OK')" class="bg-green-100 hover:bg-green-200 text-green-700 px-2 py-1 rounded text-xs font-bold">
+                    OK
+                  </button>
+                  <button onclick="adminUpdateStatus('${record.id}', 'NG')" class="bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1 rounded text-xs font-bold">
+                    NG
+                  </button>
+                  <button onclick="adminUpdateStatus('${record.id}', 'REPAIR')" class="bg-yellow-100 hover:bg-yellow-200 text-yellow-700 px-2 py-1 rounded text-xs font-bold">
+                    REPAIR
+                  </button>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+    }
+
+    // NEW FUNCTION: Admin update status
+    function adminUpdateStatus(recordId, newStatus) {
+      console.log(`Admin updating record ${recordId} to ${newStatus}`);
+      
+      const recordIndex = records.findIndex(r => r.id.toString() === recordId.toString());
+      if (recordIndex === -1) {
+        showToast('ไม่พบข้อมูลที่จะอัปเดต', 'error');
+        return;
+      }
+
+      // Update local data first for immediate UI feedback
+      records[recordIndex].status = newStatus;
+      records[recordIndex].lastModified = new Date().toISOString();
+      records[recordIndex].modifiedBy = 'ผู้ดูแลระบบ (แก้ไขด่วน)';
+      
+      // Refresh the table to show the change
+      refreshAdminRecords();
+      
+      // Refresh search result if it's currently showing
+      if (document.getElementById('adminSearchResult').innerHTML !== '') {
+          adminSearch();
+      }
+      
+      // Update Firebase in the background
+      database.ref('pdi_records').orderByChild('id').equalTo(Number(recordId)).once('value')
+        .then(snapshot => {
+          if (snapshot.exists()) {
+            const updates = {};
+            snapshot.forEach(childSnapshot => {
+              updates[childSnapshot.key] = {
+                ...childSnapshot.val(),
+                status: newStatus,
+                lastModified: new Date().toISOString(),
+                modifiedBy: 'ผู้ดูแลระบบ (แก้ไขด่วน)'
+              };
+            });
+            return database.ref('pdi_records').update(updates);
+          }
+        })
+        .then(() => {
+          showToast(`✅ อัปเดตสถานะเป็น ${newStatus} สำเร็จ!`, 'success');
+        })
+        .catch(error => {
+          console.error('Error updating status:', error);
+          showToast('เกิดข้อผิดพลาดในการอัปเดตสถานะ', 'error');
+          // Revert local change if Firebase update fails (optional)
+          // loadRecords();
+        });
+    }
+
+    function quickEditRecord(vin) {
+      // Pre-fill the search field and trigger search
+      document.getElementById('adminVin').value = vin;
+      adminSearch();
+      showToast(`🔍 โหลดข้อมูล VIN: ${vin} สำหรับแก้ไข`, 'success');
+    }
+
+    function viewRecordDetails(vin) {
+      const record = records.find(r => r.vin === vin);
+      if (!record) {
+        showToast('ไม่พบข้อมูล', 'error');
+        return;
+      }
+      
+      // Create modal for viewing details
+      const modal = document.createElement('div');
+      modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4';
+      modal.onclick = () => modal.remove();
+      
+      const photoGallery = record.photos && (record.photos[1] || record.photos[2] || record.photos[3]) ? `
+        <div class="mt-4">
+          <div class="font-medium text-gray-700 mb-3">📷 รูปภาพประกอบ:</div>
+          <div class="grid grid-cols-3 gap-3">
+            ${record.photos[1] ? `
+              <div class="relative group">
+                <img src="${record.photos[1]}" alt="หน้าปัด" class="w-full h-20 object-cover rounded-lg border cursor-pointer hover:opacity-80" onclick="viewPhoto('${record.photos[1]}', 'หน้าปัด')">
+                <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-b-lg">📷 หน้าปัด</div>
+              </div>
+            ` : '<div class="w-full h-20 bg-gray-100 rounded-lg border flex items-center justify-center text-gray-400 text-xs">ไม่มีรูป</div>'}
+            
+            ${record.photos[2] ? `
+              <div class="relative group">
+                <img src="${record.photos[2]}" alt="เลข VIN" class="w-full h-20 object-cover rounded-lg border cursor-pointer hover:opacity-80" onclick="viewPhoto('${record.photos[2]}', 'เลข VIN')">
+                <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-b-lg">🔎 เลข VIN</div>
+              </div>
+            ` : '<div class="w-full h-20 bg-gray-100 rounded-lg border flex items-center justify-center text-gray-400 text-xs">ไม่มีรูป</div>'}
+            
+            ${record.photos[3] ? `
+              <div class="relative group">
+                <img src="${record.photos[3]}" alt="Check Sheet" class="w-full h-20 object-cover rounded-lg border cursor-pointer hover:opacity-80" onclick="viewPhoto('${record.photos[3]}', 'Check Sheet')">
+                <div class="absolute bottom-0 left-0 right-0 bg-black bg-opacity-60 text-white text-xs px-2 py-1 rounded-b-lg">🧾 Check Sheet</div>
+              </div>
+            ` : '<div class="w-full h-20 bg-gray-100 rounded-lg border flex items-center justify-center text-gray-400 text-xs">ไม่มีรูป</div>'}
+          </div>
+        </div>
+      ` : '';
+      
+      modal.innerHTML = `
+        <div class="bg-white rounded-xl max-w-4xl max-h-full overflow-auto" onclick="event.stopPropagation()">
+          <div class="p-4 border-b flex items-center justify-between">
+            <h3 class="text-lg font-bold text-gray-900">📋 รายละเอียดการตรวจสอบ</h3>
+            <button onclick="this.closest('.fixed').remove()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+          </div>
+          <div class="p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
+              <div><strong>VIN:</strong> ${record.vin}</div>
+              <div><strong>สถานะ:</strong> <span class="px-2 py-1 rounded text-xs font-medium ${record.status === 'OK' ? 'bg-green-100 text-green-700' : record.status === 'NG' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}">${record.status}</span></div>
+              <div><strong>รุ่น:</strong> ${record.adminData?.carModel || 'รออัพเดท'}</div>
+              <div><strong>สี:</strong> ${record.adminData?.carColor || 'รออัพเดท'}</div>
+              <div><strong>ผู้ตรวจ:</strong> ${record.inspector}</div>
+              <div><strong>วันที่ตรวจ:</strong> ${new Date(record.timestamp).toLocaleString('th-TH')}</div>
+              <div><strong>PDI Date:</strong> ${record.adminData?.pdiDate ? new Date(record.adminData.pdiDate).toLocaleDateString('th-TH') : 'รออัพเดท'}</div>
+              <div><strong>PDI Status:</strong> ${record.pdiCompleted ? '<span class="text-green-600">✅ เสร็จแล้ว</span>' : '<span class="text-yellow-600">⏳ รอดำเนินการ</span>'}</div>
+            </div>
+            
+            ${record.defects && record.defects.length > 0 ? `
+              <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <div class="text-red-700 font-medium mb-3">🔧 ความเสียหาย (${record.defects.length} ตำแหน่ง):</div>
+                <div class="space-y-3">
+                  ${record.defects.map((defect, index) => `
+                    <div class="bg-white rounded p-3 border border-red-100">
+                      <div class="font-medium text-red-800 mb-2">${defect.position}</div>
+                      <div class="grid grid-cols-2 gap-2 text-xs text-gray-600 mb-2">
+                        ${defect.categoryDefect ? `<div>🔧 หมวดหมู่: ${defect.categoryDefect}</div>` : ''}
+                        ${defect.ngStatus ? `<div>⚠️ ระดับ: ${defect.ngStatus}</div>` : ''}
+                        ${defect.stockStatus ? `<div>📦 Stock: ${defect.stockStatus}</div>` : ''}
+                        ${defect.statusRepair ? `<div>🔨 การซ่อม: ${defect.statusRepair}</div>` : ''}
+                        ${defect.repairDate ? `<div>📅 วันซ่อม: ${new Date(defect.repairDate).toLocaleDateString('th-TH')}</div>` : ''}
+                      </div>
+                      ${defect.defectDescription ? `<div class="text-red-600 text-sm">${defect.defectDescription}</div>` : ''}
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+            
+            ${photoGallery}
+          </div>
+          <div class="p-4 border-t bg-gray-50 text-center">
+            <button onclick="this.closest('.fixed').remove()" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg">
+              ปิด
+            </button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+    }
+
+    function addUser() {
+      showToast('🚧 ฟีเจอร์จัดการผู้ใช้กำลังพัฒนา', 'error');
+    }
+
+    function copyVin(vin, buttonElement) {
+      // Copy VIN to clipboard
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(vin).then(() => {
+          // Change button appearance to show success
+          buttonElement.className = 'copy-btn bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-medium transition-all duration-200';
+          buttonElement.innerHTML = '✅ COPIED';
+          
+          // Show toast notification
+          showToast(`📋 คัดลอก VIN: ${vin} แล้ว!`, 'success');
+          
+          // Reset button after 2 seconds
+          setTimeout(() => {
+            buttonElement.className = 'copy-btn bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded text-xs font-medium transition-all duration-200';
+            buttonElement.innerHTML = '📋 COPY';
+          }, 2000);
+        }).catch(err => {
+          console.error('Failed to copy VIN:', err);
+          fallbackCopyVin(vin, buttonElement);
+        });
+      } else {
+        // Fallback for older browsers
+        fallbackCopyVin(vin, buttonElement);
+      }
+    }
+
+    function fallbackCopyVin(vin, buttonElement) {
+      // Create temporary textarea for copying
+      const textArea = document.createElement('textarea');
+      textArea.value = vin;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      
+      try {
+        const successful = document.execCommand('copy');
+        if (successful) {
+          // Change button appearance to show success
+          buttonElement.className = 'copy-btn bg-green-100 text-green-700 px-2 py-1 rounded text-xs font-medium transition-all duration-200';
+          buttonElement.innerHTML = '✅ COPIED';
+          
+          // Show toast notification
+          showToast(`📋 คัดลอก VIN: ${vin} แล้ว!`, 'success');
+          
+          // Reset button after 2 seconds
+          setTimeout(() => {
+            buttonElement.className = 'copy-btn bg-blue-100 hover:bg-blue-200 text-blue-700 px-2 py-1 rounded text-xs font-medium transition-all duration-200';
+            buttonElement.innerHTML = '📋 COPY';
+          }, 2000);
+        } else {
+          showToast('ไม่สามารถคัดลอกได้ - กรุณาคัดลอกด้วยตนเอง', 'error');
+        }
+      } catch (err) {
+        console.error('Fallback copy failed:', err);
+        showToast(`VIN: ${vin} - กรุณาคัดลอกด้วยตนเอง`, 'error');
+      }
+      
+      document.body.removeChild(textArea);
+    }
+
+    function viewPhoto(photoSrc, title) {
+      // Create modal overlay
+      const modal = document.createElement('div');
+      modal.className = 'fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4';
+      modal.onclick = () => modal.remove();
+      
+      // Create modal content
+      modal.innerHTML = `
+        <div class="bg-white rounded-xl max-w-4xl max-h-full overflow-auto" onclick="event.stopPropagation()">
+          <div class="p-4 border-b flex items-center justify-between">
+            <h3 class="text-lg font-bold text-gray-900">📷 ${title}</h3>
+            <button onclick="this.closest('.fixed').remove()" class="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+          </div>
+          <div class="p-4">
+            <img src="${photoSrc}" alt="${title}" class="w-full h-auto max-h-96 object-contain rounded-lg">
+          </div>
+          <div class="p-4 border-t bg-gray-50 text-center">
+            <button onclick="this.closest('.fixed').remove()" class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg">
+              ปิด
+            </button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(modal);
+    }
+
+  </script>
+</body>
+</html>
